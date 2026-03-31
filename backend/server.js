@@ -1,6 +1,8 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const session = require("express-session");
+const passport = require("passport");
 
 // Route handlers
 const chatRoute = require("./routes/chat");
@@ -8,6 +10,7 @@ const generateRoute = require("./routes/generate");
 const teachRoute = require("./routes/teach");
 const uploadRoute = require("./routes/upload");
 const askDocsRoute = require("./routes/askDocs");
+const authRoute = require("./routes/auth"); // GitHub OAuth
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -41,13 +44,40 @@ app.use(
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true }));
 
+// ── Session + Passport ────────────────────────────────
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "prepmind_super_secret_key",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === "production", // HTTPS only in prod
+      maxAge: 1000 * 60 * 60 * 24, // 1 day
+    },
+  })
+);
+app.use(passport.initialize());
+app.use(passport.session());
+
+// ── Auth Routes (GitHub OAuth — no rate limiting) ─────
+app.use("/auth", authRoute);
+
 // ── Health check ─────────────────────────────────────
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
     service: "PrepMind AI Backend",
     version: "1.0.0",
-    routes: ["/api/chat", "/api/generate", "/api/teach", "/api/upload", "/api/ask-docs"],
+    routes: [
+      "/api/chat",
+      "/api/generate",
+      "/api/teach",
+      "/api/upload",
+      "/api/ask-docs",
+      "/auth/github",
+      "/auth/me",
+      "/auth/logout",
+    ],
     ai: {
       gemini:
         !!process.env.GEMINI_API_KEY &&
