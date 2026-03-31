@@ -1,8 +1,6 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const session = require("express-session");
-const passport = require("passport");
 
 // Route handlers
 const chatRoute = require("./routes/chat");
@@ -10,8 +8,7 @@ const generateRoute = require("./routes/generate");
 const teachRoute = require("./routes/teach");
 const uploadRoute = require("./routes/upload");
 const askDocsRoute = require("./routes/askDocs");
-const authRoute = require("./routes/auth");    // Google + GitHub OAuth
-const historyRoute = require("./routes/history"); // Practice history + save-result
+const historyRoute = require("./routes/history"); // Practice history (Supabase JWT auth)
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -45,24 +42,6 @@ app.use(
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// ── Session + Passport ────────────────────────────────
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || "prepmind_super_secret_key",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: process.env.NODE_ENV === "production", // HTTPS only in prod
-      maxAge: 1000 * 60 * 60 * 24, // 1 day
-    },
-  })
-);
-app.use(passport.initialize());
-app.use(passport.session());
-
-// ── Auth Routes (GitHub OAuth — no rate limiting) ─────
-app.use("/auth", authRoute);
-
 // ── Health check ─────────────────────────────────────
 app.get("/", (req, res) => {
   res.json({
@@ -77,10 +56,6 @@ app.get("/", (req, res) => {
       "/api/ask-docs",
       "/api/save-result",
       "/api/history",
-      "/auth/github",
-      "/auth/google",
-      "/auth/me",
-      "/auth/logout",
     ],
     ai: {
       gemini:
@@ -134,8 +109,6 @@ app.listen(PORT, () => {
 
   const checks = [
     ["GEMINI_API_KEY", "AI routes"],
-    ["GITHUB_CLIENT_ID", "GitHub OAuth"],
-    ["GOOGLE_CLIENT_ID", "Google OAuth"],
     ["SUPABASE_URL", "Supabase DB"],
   ];
   checks.forEach(([key, label]) => {

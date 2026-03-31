@@ -1,10 +1,21 @@
 // Centralized API service — all backend calls go through here.
+import { supabase } from "@/lib/supabase";
 
 const API_BASE =
   (import.meta.env.VITE_API_URL as string) ||
   "https://prepmind-backend-bfkw.onrender.com";
 
 const getModel = () => localStorage.getItem("prepmind_model") || "gemini";
+
+// ── Get Supabase JWT for authenticated requests ───────
+async function getSupabaseToken(): Promise<string | null> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
 
 // ── Abort controller map — one active request per endpoint ───
 const activeControllers = new Map<string, AbortController>();
@@ -35,9 +46,13 @@ async function request<T>(endpoint: string, options?: RequestInit, timeoutMs = 5
 
   try {
     const res = await fetch(`${API_BASE}${endpoint}`, {
-      headers: { "Content-Type": "application/json" },
-      signal: controller.signal,
       ...options,
+      // Merge headers: options.headers override defaults (e.g. Authorization)
+      headers: {
+        "Content-Type": "application/json",
+        ...(options?.headers as Record<string, string> ?? {}),
+      },
+      signal: controller.signal,
     });
 
     clearTimeout(timer);
@@ -179,16 +194,18 @@ export interface HistoryEntry {
 }
 
 export const saveResult = async (payload: PracticeResult): Promise<{ success: boolean }> => {
+  const token = await getSupabaseToken();
   return request<{ success: boolean }>("/api/save-result", {
     method: "POST",
     body: JSON.stringify(payload),
-    credentials: "include", // session cookie
-  } as RequestInit);
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
 };
 
 export const getHistory = async (): Promise<{ success: boolean; history: HistoryEntry[] }> => {
+  const token = await getSupabaseToken();
   return request<{ success: boolean; history: HistoryEntry[] }>("/api/history", {
-    credentials: "include",
-  } as RequestInit);
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
 };
 
