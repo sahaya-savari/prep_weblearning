@@ -6,48 +6,59 @@ const NodeCache = require("node-cache");
 const cache = new NodeCache({ stdTTL: 600 });
 
 /**
- * Call Google Gemini 1.5 Flash REST API or local Ollama with Caching and Optimized Prompts
+ * Extract a human-readable error from an Axios error (incl. Gemini API body).
+ */
+function extractAxiosError(err) {
+  if (err.response) {
+    // Gemini returned an HTTP error — extract the actual message
+    const data = err.response.data;
+    const geminiMsg = data?.error?.message || JSON.stringify(data).slice(0, 300);
+    return `Gemini HTTP ${err.response.status}: ${geminiMsg}`;
+  }
+  if (err.request) {
+    return `Gemini no response (timeout or network): ${err.message}`;
+  }
+  return err.message;
+}
+
+/**
+ * Call Google Gemini REST API with caching and optimised prompts.
  * @param {string} rawPrompt
- * @param {string} model "gemini" | "ollama"
  * @returns {Promise<string>} Generated text
  */
-async function callGemini(rawPrompt, model = "gemini") {
-  // Optimize prompt with explicit system instructions
+async function callGemini(rawPrompt) {
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (!apiKey || apiKey === "your_gemini_api_key_here" || apiKey.trim() === "") {
+    throw new Error(
+      "GEMINI_API_KEY is not configured. Add a valid key to your Render environment variables."
+    );
+  }
+
+  // Optimise prompt with explicit system instructions
   const optimizedPrompt = `You are PrepMind AI, an expert exam preparation tutor.
 Always format your responses cleanly using proper Markdown, including bullet points, code blocks where necessary, and clear headings. Be concise, direct, and educational.
 
 User Request:
 ${rawPrompt}`;
 
-  // Generate a unique 256-bit hash for the prompt+model to use as the cache key
-  const cacheKey = crypto.createHash('sha256').update(model + optimizedPrompt).digest('hex');
+  // Cache key: sha256 of prompt
+  const cacheKey = crypto
+    .createHash("sha256")
+    .update(optimizedPrompt)
+    .digest("hex");
 
-  // Check cache
   if (cache.has(cacheKey)) {
-    console.log(`[${model}] Returning cached response.`);
+    console.log("[Gemini] Returning cached response.");
     return cache.get(cacheKey);
   }
 
-  let responseText = "";
+  // Try gemini-2.0-flash first, fall back to gemini-1.5-flash
+  const models = ["gemini-2.0-flash", "gemini-1.5-flash"];
+  let lastError = null;
 
-  if (model === "ollama") {
-    // Route to local Ollama
-    const ollamaUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-    const res = await axios.post(`${ollamaUrl}/api/generate`, {
-      model: "llama3", // Default local model
-      prompt: optimizedPrompt,
-      stream: false
-    }, { timeout: 60000 });
-    
-    responseText = res.data.response;
-  } else {
-    // Default: Route to Gemini
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey || apiKey === "your_gemini_api_key_here") {
-      throw new Error("GEMINI_KEY_MISSING");
-    }
-
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  for (const modelName of models) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
     const body = {
       contents: [{ parts: [{ text: optimizedPrompt }] }],
       generationConfig: {
@@ -56,21 +67,32 @@ ${rawPrompt}`;
       },
     };
 
-    const res = await axios.post(url, body, {
-      headers: { "Content-Type": "application/json" },
-      timeout: 30000,
-    });
+    try {
+      console.log(`[Gemini] Trying model: ${modelName}`);
+      const res = await axios.post(url, body, {
+        headers: { "Content-Type": "application/json" },
+        timeout: 30000,
+      });
 
-    const candidate = res.data?.candidates?.[0];
-    if (!candidate) throw new Error("Gemini returned no candidate");
+      const candidate = res.data?.candidates?.[0];
+      if (!candidate) {
+        const reason = res.data?.promptFeedback?.blockReason || "unknown";
+        throw new Error(`Gemini returned no candidates. Block reason: ${reason}`);
+      }
 
-    responseText = candidate.content.parts[0].text;
+      const text = candidate.content?.parts?.[0]?.text;
+      if (!text) throw new Error("Gemini candidate had no text content.");
+
+      console.log(`[Gemini] ✓ Responded using ${modelName}`);
+      cache.set(cacheKey, text);
+      return text;
+    } catch (err) {
+      lastError = extractAxiosError(err);
+      console.error(`[Gemini] ✗ ${modelName} failed: ${lastError}`);
+    }
   }
-  
-  // Store the response in cache
-  cache.set(cacheKey, responseText);
 
-  return responseText;
+  throw new Error(`All Gemini models failed. Last error: ${lastError}`);
 }
 
 module.exports = { callGemini };
