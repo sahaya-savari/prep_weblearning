@@ -53,8 +53,8 @@ ${rawPrompt}`;
     return cache.get(cacheKey);
   }
 
-  // Try gemini-2.0-flash first, fall back to gemini-1.5-flash
-  const models = ["gemini-2.0-flash", "gemini-1.5-flash"];
+  // Try gemini-2.0-flash-lite first (most quota), then gemini-2.0-flash as fallback
+  const models = ["gemini-2.0-flash-lite", "gemini-2.0-flash"];
   let lastError = null;
 
   for (const modelName of models) {
