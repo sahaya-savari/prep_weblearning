@@ -1,5 +1,6 @@
 const passport = require("passport");
 const { Strategy: GitHubStrategy } = require("passport-github2");
+const { Strategy: GoogleStrategy } = require("passport-google-oauth20");
 const express = require("express");
 const router = express.Router();
 
@@ -13,6 +14,20 @@ passport.use(
     },
     (accessToken, refreshToken, profile, done) => {
       // For now just pass the profile (no DB yet)
+      return done(null, profile);
+    }
+  )
+);
+
+// ── Passport Google Strategy ──────────────────────────
+passport.use(
+  new GoogleStrategy(
+    {
+      clientID: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      callbackURL: "/auth/google/callback",
+    },
+    (accessToken, refreshToken, profile, done) => {
       return done(null, profile);
     }
   )
@@ -32,6 +47,20 @@ router.get(
   passport.authenticate("github", { failureRedirect: "/" }),
   (req, res) => {
     // On success → redirect to the practice page
+    res.redirect("https://prep-weblearning.vercel.app/practice");
+  }
+);
+
+// ── Google Routes ─────────────────────────────────────
+
+// Start Google login
+router.get("/google", passport.authenticate("google", { scope: ["profile", "email"] }));
+
+// Google callback
+router.get(
+  "/google/callback",
+  passport.authenticate("google", { failureRedirect: "/" }),
+  (req, res) => {
     res.redirect("https://prep-weblearning.vercel.app/practice");
   }
 );
