@@ -1,67 +1,61 @@
-/**
- * In-memory RAG (Retrieval-Augmented Generation) store.
- * Documents are stored as arrays of chunks keyed by documentId.
- * Resets when the server restarts (Phase 3 will add Supabase persistence).
- */
+const supabase = require("./supabase");
 
-/** @type {Map<string, { chunk: string; documentName: string }[]>} */
-const store = new Map();
+async function addDocument(originalName, chunks) {
+  if (!supabase) throw new Error("Supabase URL or Key not configured");
+  
+  const { data: doc, error: docError } = await supabase
+    .from('documents')
+    .insert({ name: originalName })
+    .select()
+    .single();
+    
+  if (docError) throw new Error("DB Error documents: " + docError.message);
+  const documentId = doc.id;
 
-/**
- * Add a document's chunks to the store.
- * @param {string} documentId
- * @param {string} documentName
- * @param {string[]} chunks
- */
-function addDocument(documentId, documentName, chunks) {
-  const entries = chunks.map((chunk) => ({ chunk, documentName }));
-  store.set(documentId, entries);
-  console.log(`[RAG] Stored "${documentName}" (${chunks.length} chunks, id=${documentId})`);
+  const chunkRows = chunks.map(chunk => ({
+    document_id: documentId,
+    document_name: originalName,
+    chunk_text: chunk
+  }));
+  
+  const { error: chunkError } = await supabase.from('chunks').insert(chunkRows);
+  if (chunkError) throw new Error("DB Error chunks: " + chunkError.message);
+
+  return documentId;
 }
 
-/**
- * Retrieve the top-k most relevant chunks for a query using keyword overlap scoring.
- * @param {string} query
- * @param {string[]} [documentIds] — if provided, only search these docs
- * @param {number} [topK=5]
- * @returns {{ chunk: string; documentName: string }[]}
- */
-function retrieve(query, documentIds, topK = 5) {
+async function retrieve(query, documentIds, topK = 5) {
+  if (!supabase) return [];
+  
   const queryWords = new Set(
     query.toLowerCase().split(/\W+/).filter((w) => w.length > 3)
   );
 
-  const allChunks = [];
-  for (const [id, entries] of store.entries()) {
-    if (documentIds && documentIds.length > 0 && !documentIds.includes(id)) continue;
-    allChunks.push(...entries);
+  let queryBuilder = supabase.from('chunks').select('chunk_text, document_name');
+  if (documentIds && documentIds.length > 0) {
+    queryBuilder = queryBuilder.in('document_id', documentIds);
   }
 
-  if (allChunks.length === 0) return [];
+  const { data: allChunks, error } = await queryBuilder;
+  if (error || !allChunks || allChunks.length === 0) return [];
 
-  // Score each chunk by word overlap with the query
   const scored = allChunks.map((entry) => {
-    const words = entry.chunk.toLowerCase().split(/\W+/);
+    const words = entry.chunk_text.toLowerCase().split(/\W+/);
     const overlap = words.filter((w) => queryWords.has(w)).length;
-    return { ...entry, score: overlap };
+    return { chunk: entry.chunk_text, documentName: entry.document_name, score: overlap };
   });
 
-  // Sort descending by score, return top-k unique snippets
   return scored
     .sort((a, b) => b.score - a.score)
     .slice(0, topK)
     .map(({ chunk, documentName }) => ({ chunk, documentName }));
 }
 
-/** List all stored document IDs and names */
-function listDocuments() {
-  const result = [];
-  for (const [id, entries] of store.entries()) {
-    if (entries.length > 0) {
-      result.push({ documentId: id, documentName: entries[0].documentName });
-    }
-  }
-  return result;
+async function listDocuments() {
+  if (!supabase) return [];
+  const { data, error } = await supabase.from('documents').select('id, name');
+  if (error || !data) return [];
+  return data.map(d => ({ documentId: d.id, documentName: d.name }));
 }
 
 module.exports = { addDocument, retrieve, listDocuments };

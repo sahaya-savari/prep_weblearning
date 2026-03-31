@@ -93,27 +93,6 @@ export default function SettingsPage() {
         </div>
       </Card>
 
-      {/* Backend Settings */}
-      <Card className="p-5 sm:p-6 glass rounded-2xl space-y-5">
-        <h2 className="font-semibold flex items-center gap-2">
-          <div className="rounded-lg bg-primary/10 p-1.5">
-            <Server className="h-4 w-4 text-primary" />
-          </div>
-          Backend
-        </h2>
-        <div className="space-y-2">
-          <Label className="text-sm">API URL</Label>
-          <Input
-            value={apiUrl}
-            onChange={(e) => setApiUrl(e.target.value)}
-            placeholder="http://localhost:5000"
-            className="font-mono text-sm bg-muted/30 border-border/40 rounded-xl"
-          />
-          <p className="text-xs text-muted-foreground/60">
-            URL of your separate Node.js Express backend.
-          </p>
-        </div>
-      </Card>
 
       <Button onClick={handleSave} className="btn-glow rounded-xl w-full sm:w-auto">
         <Save className="mr-2 h-4 w-4" /> Save Settings

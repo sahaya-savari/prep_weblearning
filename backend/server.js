@@ -59,7 +59,19 @@ app.get("/", (req, res) => {
   });
 });
 
+const rateLimit = require("express-rate-limit");
+
+// ── Rate Limiting ────────────────────────────────────
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30, // Limit each IP to 30 requests per `window` (here, per minute)
+  message: { error: "Too many requests from this IP, please try again after a minute" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // ── API Routes ────────────────────────────────────────
+app.use("/api/", apiLimiter);
 app.use("/api/chat", chatRoute);
 app.use("/api/generate", generateRoute);
 app.use("/api/teach", teachRoute);
