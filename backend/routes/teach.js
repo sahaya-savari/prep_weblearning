@@ -8,7 +8,7 @@ const { generate } = require("../services/ai");
  * Returns: { explanation, keyPoints, examples, formulas? }
  */
 router.post("/", async (req, res) => {
-  const { topic, exam = "Computer Science" } = req.body;
+  const { topic, exam = "Computer Science", model = "gemini" } = req.body;
 
   if (!topic) return res.status(400).json({ error: "topic is required" });
 
@@ -38,7 +38,7 @@ Respond with ONLY a valid JSON object (no markdown, no code block):
 Make it engaging, educational, and exam-focused.`;
 
   try {
-    const raw = await generate(prompt);
+    const raw = await generate(prompt, model);
 
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("AI did not return valid JSON object");

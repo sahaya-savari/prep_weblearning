@@ -8,7 +8,7 @@ const { retrieve } = require("../services/rag");
  * Body: { message, exam?, chatHistory?, notebookMode? }
  */
 router.post("/", async (req, res) => {
-  const { message, exam = "General", chatHistory = [], notebookMode = false } = req.body;
+  const { message, exam = "General", chatHistory = [], notebookMode = false, model = "gemini" } = req.body;
 
   if (!message) return res.status(400).json({ error: "message is required" });
 
@@ -18,7 +18,7 @@ router.post("/", async (req, res) => {
 
     // Notebook mode: pull relevant chunks from the RAG store
     if (notebookMode) {
-      const chunks = retrieve(message, [], 4);
+      const chunks = await retrieve(message, [], 4);
       if (chunks.length > 0) {
         contextSection = `\n\nRELEVANT NOTES FROM THE USER'S KNOWLEDGE BASE:\n${chunks
           .map((c, i) => `[${i + 1}] (from "${c.documentName}"): ${c.chunk}`)
@@ -41,7 +41,7 @@ ${historyText ? `Previous conversation:\n${historyText}\n` : ""}
 User: ${message}
 Assistant:`;
 
-    const response = await generate(prompt);
+    const response = await generate(prompt, model);
     res.json({ response, ...(sources.length > 0 && { sources }) });
   } catch (err) {
     console.error("[/api/chat]", err.message);

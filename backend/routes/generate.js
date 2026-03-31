@@ -8,7 +8,7 @@ const { generate } = require("../services/ai");
  * Returns: { questions: MCQQuestion[] }
  */
 router.post("/", async (req, res) => {
-  const { exam = "Computer Science", topic = "General", difficulty = "medium", count = 5 } = req.body;
+  const { exam = "Computer Science", topic = "General", difficulty = "medium", count = 5, model = "gemini" } = req.body;
 
   const prompt = `You are an expert exam question creator for ${exam}.
 
@@ -33,7 +33,7 @@ Rules:
 - Do NOT include any text before or after the JSON array`;
 
   try {
-    const raw = await generate(prompt);
+    const raw = await generate(prompt, model);
 
     // Extract JSON from the response (handle cases where AI wraps it in text)
     const jsonMatch = raw.match(/\[[\s\S]*\]/);

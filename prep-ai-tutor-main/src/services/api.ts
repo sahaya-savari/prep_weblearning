@@ -2,7 +2,20 @@
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
+const getModel = () => localStorage.getItem("prepmind_model") || "gemini";
+
 async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  // Automatically inject the selected AI model into JSON payloads
+  if (options?.body && typeof options.body === "string" && options.method === "POST") {
+    try {
+      const parsed = JSON.parse(options.body);
+      parsed.model = getModel();
+      options.body = JSON.stringify(parsed);
+    } catch {
+      // Ignored
+    }
+  }
+
   const res = await fetch(`${API_BASE}${endpoint}`, {
     headers: { "Content-Type": "application/json" },
     ...options,

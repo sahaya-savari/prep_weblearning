@@ -10,6 +10,11 @@ export interface UploadedDocument {
   type: string;
 }
 
+export interface ChatMessage {
+  role: "user" | "assistant" | "system";
+  content: string;
+}
+
 interface AppState {
   selectedExam: string;
   setSelectedExam: (exam: string) => void;
@@ -21,6 +26,11 @@ interface AppState {
   toggleTopicComplete: (topic: string) => void;
   practiceStats: { correct: number; total: number; sessions: number };
   updatePracticeStats: (correct: number, total: number) => void;
+  chatHistory: ChatMessage[];
+  setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+  saveChatHistory: (history: ChatMessage[]) => void;
+  selectedAiModel: "gemini" | "ollama";
+  setSelectedAiModel: (model: "gemini" | "ollama") => void;
 }
 
 const AppContext = createContext<AppState | undefined>(undefined);
@@ -38,6 +48,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [practiceStats, setPracticeStats] = useState(() => {
     try { return JSON.parse(localStorage.getItem("prepmind_stats") || '{"correct":0,"total":0,"sessions":0}'); } catch { return { correct: 0, total: 0, sessions: 0 }; }
   });
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>(() => {
+    try { return JSON.parse(localStorage.getItem("prepmind_chat") || "[]"); } catch { return []; }
+  });
+  const [selectedAiModel, setSelectedAiModelRaw] = useState<"gemini" | "ollama">(() => {
+    return (localStorage.getItem("prepmind_model") as "gemini" | "ollama") || "gemini";
+  });
+
+  const setSelectedAiModel = useCallback((model: "gemini" | "ollama") => {
+    setSelectedAiModelRaw(model);
+    localStorage.setItem("prepmind_model", model);
+  }, []);
 
   // Documents remain local-only for now
   const [documents, setDocuments] = useState<UploadedDocument[]>(() => {
@@ -72,6 +93,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (data.practice_stats) {
           setPracticeStats(data.practice_stats);
           localStorage.setItem("prepmind_stats", JSON.stringify(data.practice_stats));
+        }
+        if (data.chat_history) {
+          setChatHistory(data.chat_history);
+          localStorage.setItem("prepmind_chat", JSON.stringify(data.chat_history));
         }
       }
     }
@@ -112,6 +137,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, [user]);
 
+  const saveChatHistory = useCallback((history: ChatMessage[]) => {
+    setChatHistory(history);
+    localStorage.setItem("prepmind_chat", JSON.stringify(history));
+    if (user) supabase.from('profiles').update({ chat_history: history }).eq('id', user.id).then();
+  }, [user]);
+
   const addDocument = useCallback((doc: UploadedDocument) => {
     setDocuments(prev => {
       const next = [...prev, doc];
@@ -134,6 +165,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       documents, addDocument, removeDocument,
       completedTopics, toggleTopicComplete,
       practiceStats, updatePracticeStats,
+      chatHistory, setChatHistory, saveChatHistory,
+      selectedAiModel, setSelectedAiModel
     }}>
       {children}
     </AppContext.Provider>

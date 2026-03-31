@@ -5,11 +5,12 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LoadingSpinner, EmptyState } from "@/components/shared/StatusComponents";
 import { generateMCQs, type MCQQuestion } from "@/services/api";
-import { BookOpen, CheckCircle2, XCircle, ArrowRight, RotateCcw } from "lucide-react";
+import { BookOpen, CheckCircle2, XCircle, ArrowRight, RotateCcw, BrainCircuit } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { ShareActions } from "@/components/ShareActions";
 
 export default function PracticePage() {
-  const { selectedExam, updatePracticeStats } = useAppContext();
+  const { selectedExam, updatePracticeStats, selectedAiModel } = useAppContext();
   const [questions, setQuestions] = useState<MCQQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
@@ -17,6 +18,7 @@ export default function PracticePage() {
   const [score, setScore] = useState({ correct: 0, total: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isFinished, setIsFinished] = useState(false);
 
   const currentQ = questions[currentIndex];
 
@@ -31,8 +33,9 @@ export default function PracticePage() {
       setSelectedAnswer(null);
       setRevealed(false);
       setScore({ correct: 0, total: 0 });
+      setIsFinished(false);
     } catch {
-      setError("Backend not connected yet. Feature coming soon.");
+      setError("Backend connection failed. Feature coming soon.");
     } finally {
       setLoading(false);
     }
@@ -63,7 +66,17 @@ export default function PracticePage() {
 
   const handleFinish = () => {
     updatePracticeStats(score.correct, score.total);
-    handleGenerate();
+    setIsFinished(true);
+  };
+
+  const getMarkdownReport = () => {
+    let md = `# Practice Summary: ${selectedExam}\n\n**Score:** ${score.correct}/${score.total}\n\n---\n\n`;
+    questions.forEach((q, i) => {
+      md += `### Q${i + 1}: ${q.question}\n`;
+      md += `*Correct Answer:* ${q.options[q.correctIndex]}\n\n`;
+      md += `> **Explanation:** ${q.explanation}\n\n`;
+    });
+    return md;
   };
 
   if (!selectedExam) {
@@ -77,21 +90,31 @@ export default function PracticePage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6 pb-20">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">MCQ Practice</h1>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            Practice
+            <Badge variant="outline" className="text-[10px] ml-2 font-mono bg-accent/10 border-accent/20 text-accent">
+              {selectedAiModel.toUpperCase()}
+            </Badge>
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Exam: <Badge variant="secondary" className="rounded-lg">{selectedExam}</Badge>
+            Context: <Badge variant="secondary" className="rounded-lg">{selectedExam}</Badge>
           </p>
         </div>
-        <Button onClick={handleGenerate} disabled={loading} className="btn-glow self-start sm:self-auto">
+        <Button onClick={handleGenerate} disabled={loading} className="btn-glow self-start sm:self-auto px-4 rounded-xl">
           <RotateCcw className="mr-2 h-4 w-4" />
-          {questions.length ? "New Set" : "Generate"}
+          {questions.length ? "New Set" : "Generate MCQs"}
         </Button>
       </div>
 
-      {loading && <LoadingSpinner text="Generating questions..." />}
+      {loading && (
+        <div className="py-12">
+          <LoadingSpinner text={`⚙️ Generating questions via ${selectedAiModel}...`} />
+        </div>
+      )}
+      
       {error && (
         <Card className="p-5 glass rounded-2xl text-center space-y-3">
           <p className="text-sm text-muted-foreground">⚠️ {error}</p>
@@ -102,10 +125,50 @@ export default function PracticePage() {
       )}
 
       {!loading && !error && questions.length === 0 && (
-        <EmptyState icon={BookOpen} title="Ready to practice?" description="Click Generate to get AI-powered MCQs." />
+        <motion.div 
+          initial={{ opacity: 0 }} 
+          animate={{ opacity: 1 }}
+          className="py-12 flex flex-col items-center justify-center text-center opacity-50"
+        >
+          <div className="h-16 w-16 rounded-3xl bg-secondary/30 flex items-center justify-center mb-4 border border-border">
+            <BrainCircuit className="h-8 w-8 text-foreground/40" />
+          </div>
+          <h3 className="text-lg font-medium text-foreground">Ready to test your knowledge?</h3>
+          <p className="text-sm text-muted-foreground max-w-sm mt-1">
+            Click Generate to get a fresh set of AI-crafted multiple choice questions.
+          </p>
+        </motion.div>
       )}
 
-      {currentQ && !loading && (
+      {isFinished && !loading && (
+        <motion.div
+           initial={{ opacity: 0, scale: 0.95 }}
+           animate={{ opacity: 1, scale: 1 }}
+        >
+          <Card className="p-5 sm:p-8 glass rounded-2xl text-center space-y-5 border-gradient">
+            <div className="h-16 w-16 mx-auto rounded-full bg-success/20 flex items-center justify-center ring-4 ring-success/10 mb-2">
+              <CheckCircle2 className="h-8 w-8 text-success" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight">Practice Complete!</h2>
+              <p className="text-muted-foreground mt-1">You scored {score.correct} out of {score.total}</p>
+            </div>
+            
+            <div className="max-w-md mx-auto pt-4 flex flex-col gap-4">
+               <ShareActions 
+                 content={getMarkdownReport()} 
+                 filename={`practice-${selectedExam.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}-${Date.now()}.md`} 
+                 subject={`My PrepMind Practice Score: ${score.correct}/${score.total}`} 
+               />
+               <Button onClick={handleGenerate} className="w-full btn-glow rounded-xl mt-4">
+                 Start a New Set
+               </Button>
+            </div>
+          </Card>
+        </motion.div>
+      )}
+
+      {currentQ && !loading && !isFinished && (
         <AnimatePresence mode="wait">
           <motion.div
             key={currentIndex}
@@ -119,14 +182,14 @@ export default function PracticePage() {
                 <Badge variant="outline" className="rounded-lg font-mono">
                   Q{currentIndex + 1}/{questions.length}
                 </Badge>
-                <Badge variant="secondary" className="rounded-lg">
-                  Score: {score.correct}/{score.total}
-                </Badge>
+                <div className="text-sm text-muted-foreground font-medium">
+                  Score: <span className="text-foreground">{score.correct}/{score.total}</span>
+                </div>
               </div>
 
-              <div className="h-1 rounded-full bg-muted overflow-hidden">
+              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                 <motion.div
-                  className="h-full bg-primary rounded-full"
+                  className="h-full bg-primary rounded-full transition-all"
                   initial={{ width: 0 }}
                   animate={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
                   transition={{ duration: 0.5 }}
@@ -139,11 +202,12 @@ export default function PracticePage() {
                 {currentQ.options.map((option, i) => {
                   const isCorrect = i === currentQ.correctIndex;
                   const isSelected = i === selectedAnswer;
-                  let classes = "glass rounded-xl border-border/40";
+                  let classes = "glass rounded-xl border-border/40 hover:bg-muted/30";
 
                   if (revealed) {
                     if (isCorrect) classes = "bg-success/10 border-success/30 rounded-xl";
                     else if (isSelected) classes = "bg-destructive/10 border-destructive/30 rounded-xl";
+                    else classes = "opacity-50 glass rounded-xl border-border/40 pointer-events-none";
                   } else if (isSelected) {
                     classes = "border-primary/50 bg-primary/5 rounded-xl glow-primary";
                   }
@@ -156,10 +220,10 @@ export default function PracticePage() {
                       onClick={() => handleSelect(i)}
                       className={`w-full text-left flex items-center gap-3 px-4 py-3.5 border transition-all duration-200 ${classes}`}
                     >
-                      <span className="flex-shrink-0 h-7 w-7 rounded-lg bg-muted/50 flex items-center justify-center text-xs font-mono font-semibold text-muted-foreground">
+                      <span className="flex-shrink-0 h-7 w-7 rounded-sm bg-muted/50 flex items-center justify-center text-xs font-mono font-semibold text-muted-foreground border border-border/50">
                         {String.fromCharCode(65 + i)}
                       </span>
-                      <span className="text-sm flex-1">{option}</span>
+                      <span className="text-sm flex-1 font-medium">{option}</span>
                       {revealed && isCorrect && <CheckCircle2 className="h-5 w-5 text-success flex-shrink-0" />}
                       {revealed && isSelected && !isCorrect && <XCircle className="h-5 w-5 text-destructive flex-shrink-0" />}
                     </motion.button>
@@ -172,10 +236,10 @@ export default function PracticePage() {
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
                   transition={{ duration: 0.3 }}
-                  className="rounded-xl glass p-4 border-gradient"
+                  className="rounded-xl glass p-4 border-gradient bg-muted/20"
                 >
-                  <p className="text-xs uppercase tracking-wider text-primary font-semibold mb-2">Explanation</p>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{currentQ.explanation}</p>
+                  <p className="text-[10px] uppercase tracking-wider text-primary font-bold mb-2">Explanation</p>
+                  <p className="text-sm text-foreground/80 leading-relaxed font-medium">{currentQ.explanation}</p>
                 </motion.div>
               )}
 
@@ -187,12 +251,12 @@ export default function PracticePage() {
                 )}
                 {revealed && currentIndex < questions.length - 1 && (
                   <Button onClick={handleNext} className="btn-glow rounded-xl">
-                    Next <ArrowRight className="ml-1.5 h-4 w-4" />
+                    Next Question <ArrowRight className="ml-1.5 h-4 w-4" />
                   </Button>
                 )}
                 {revealed && currentIndex === questions.length - 1 && (
-                  <Button onClick={handleFinish} className="btn-glow rounded-xl">
-                    New Set <RotateCcw className="ml-1.5 h-4 w-4" />
+                  <Button onClick={handleFinish} className="btn-glow rounded-xl bg-success text-success-foreground hover:bg-success/90 glow-success">
+                    Finish Practice <ArrowRight className="ml-1.5 h-4 w-4" />
                   </Button>
                 )}
               </div>
