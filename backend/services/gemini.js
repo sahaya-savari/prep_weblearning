@@ -2,96 +2,101 @@ const axios = require("axios");
 const crypto = require("crypto");
 const NodeCache = require("node-cache");
 
-// Cache API responses for 10 minutes to save quota
+// Cache responses for 10 minutes to conserve quota
 const cache = new NodeCache({ stdTTL: 600 });
 
+// Model cascade: try flash first, then pro as backup
+const GEMINI_MODELS = [
+  "gemini-1.5-flash",
+  "gemini-1.5-flash-8b",
+  "gemini-1.5-pro",
+];
+
 /**
- * Extract a human-readable error from an Axios error (incl. Gemini API body).
+ * Sleep helper for retry delays
  */
-function extractAxiosError(err) {
-  if (err.response) {
-    // Gemini returned an HTTP error — extract the actual message
-    const data = err.response.data;
-    const geminiMsg = data?.error?.message || JSON.stringify(data).slice(0, 300);
-    return `Gemini HTTP ${err.response.status}: ${geminiMsg}`;
-  }
-  if (err.request) {
-    return `Gemini no response (timeout or network): ${err.message}`;
-  }
-  return err.message;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Single attempt to call one specific Gemini model
+ */
+async function callGeminiModel(apiKey, model, prompt) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const body = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
+  };
+
+  const res = await axios.post(url, body, {
+    headers: { "Content-Type": "application/json" },
+    timeout: 28000,
+  });
+
+  const candidate = res.data?.candidates?.[0];
+  if (!candidate) throw new Error("Gemini returned no candidate");
+
+  return candidate.content.parts[0].text;
 }
 
 /**
- * Call Google Gemini REST API with caching and optimised prompts.
- * @param {string} rawPrompt
- * @returns {Promise<string>} Generated text
+ * Call Gemini with retry + model cascade
+ * Returns { text, fallback }
  */
 async function callGemini(rawPrompt) {
   const apiKey = process.env.GEMINI_API_KEY;
 
-  if (!apiKey || apiKey === "your_gemini_api_key_here" || apiKey.trim() === "") {
-    throw new Error(
-      "GEMINI_API_KEY is not configured. Add a valid key to your Render environment variables."
-    );
+  if (!apiKey || apiKey === "your_gemini_api_key_here") {
+    throw new Error("GEMINI_KEY_MISSING");
   }
 
-  // Optimise prompt with explicit system instructions
   const optimizedPrompt = `You are PrepMind AI, an expert exam preparation tutor.
 Always format your responses cleanly using proper Markdown, including bullet points, code blocks where necessary, and clear headings. Be concise, direct, and educational.
 
 User Request:
 ${rawPrompt}`;
 
-  // Cache key: sha256 of prompt
-  const cacheKey = crypto
-    .createHash("sha256")
-    .update(optimizedPrompt)
-    .digest("hex");
+  const cacheKey = crypto.createHash("sha256").update(optimizedPrompt).digest("hex");
 
+  // Return from cache if available
   if (cache.has(cacheKey)) {
-    console.log("[Gemini] Returning cached response.");
-    return cache.get(cacheKey);
+    console.log("[Gemini] Cache hit ✓");
+    return { text: cache.get(cacheKey), fallback: false };
   }
 
-  // Try gemini-2.0-flash-lite first (most quota), then gemini-2.0-flash as fallback
-  const models = ["gemini-2.0-flash-lite", "gemini-2.0-flash"];
   let lastError = null;
 
-  for (const modelName of models) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-    const body = {
-      contents: [{ parts: [{ text: optimizedPrompt }] }],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 2048,
-      },
-    };
+  // Try each model in the cascade with up to 2 retries on 429
+  for (const model of GEMINI_MODELS) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        console.log(`[Gemini] Trying ${model} (attempt ${attempt})`);
+        const text = await callGeminiModel(apiKey, model, optimizedPrompt);
+        cache.set(cacheKey, text);
+        console.log(`[Gemini] ${model} responded ✓`);
+        return { text, fallback: false };
+      } catch (err) {
+        const status = err?.response?.status;
+        const errMsg = err?.response?.data?.error?.message || err.message;
 
-    try {
-      console.log(`[Gemini] Trying model: ${modelName}`);
-      const res = await axios.post(url, body, {
-        headers: { "Content-Type": "application/json" },
-        timeout: 30000,
-      });
+        if (status === 429) {
+          lastError = `Quota exceeded on ${model}`;
+          console.warn(`[Gemini] 429 on ${model} attempt ${attempt}. ${attempt < 2 ? "Retrying..." : "Moving to next model."}`);
+          if (attempt < 2) await sleep(1500);
+          continue; // retry same model once, then move on
+        }
 
-      const candidate = res.data?.candidates?.[0];
-      if (!candidate) {
-        const reason = res.data?.promptFeedback?.blockReason || "unknown";
-        throw new Error(`Gemini returned no candidates. Block reason: ${reason}`);
+        if (status === 401 || status === 403) {
+          throw new Error(`Gemini auth error (${status}): ${errMsg}`);
+        }
+
+        lastError = errMsg || err.message;
+        console.warn(`[Gemini] ${model} failed: ${lastError}`);
+        break; // non-429 error — skip to next model
       }
-
-      const text = candidate.content?.parts?.[0]?.text;
-      if (!text) throw new Error("Gemini candidate had no text content.");
-
-      console.log(`[Gemini] ✓ Responded using ${modelName}`);
-      cache.set(cacheKey, text);
-      return text;
-    } catch (err) {
-      lastError = extractAxiosError(err);
-      console.error(`[Gemini] ✗ ${modelName} failed: ${lastError}`);
     }
   }
 
+  // All models exhausted
   throw new Error(`All Gemini models failed. Last error: ${lastError}`);
 }
 
