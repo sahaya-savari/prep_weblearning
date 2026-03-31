@@ -163,3 +163,32 @@ export const askFromDocs = async (
     { method: "POST", body: JSON.stringify(payload) }
   );
 };
+
+// ── Practice History (Supabase-backed) ───────────────
+export interface PracticeResult {
+  topic: string;
+  score: number;
+}
+
+export interface HistoryEntry {
+  id: string;
+  user_id: string;
+  topic: string;
+  score: number;
+  created_at: string;
+}
+
+export const saveResult = async (payload: PracticeResult): Promise<{ success: boolean }> => {
+  return request<{ success: boolean }>("/api/save-result", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    credentials: "include", // session cookie
+  } as RequestInit);
+};
+
+export const getHistory = async (): Promise<{ success: boolean; history: HistoryEntry[] }> => {
+  return request<{ success: boolean; history: HistoryEntry[] }>("/api/history", {
+    credentials: "include",
+  } as RequestInit);
+};
+

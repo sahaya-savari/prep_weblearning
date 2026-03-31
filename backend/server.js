@@ -10,7 +10,8 @@ const generateRoute = require("./routes/generate");
 const teachRoute = require("./routes/teach");
 const uploadRoute = require("./routes/upload");
 const askDocsRoute = require("./routes/askDocs");
-const authRoute = require("./routes/auth"); // GitHub OAuth
+const authRoute = require("./routes/auth");    // Google + GitHub OAuth
+const historyRoute = require("./routes/history"); // Practice history + save-result
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -74,7 +75,10 @@ app.get("/", (req, res) => {
       "/api/teach",
       "/api/upload",
       "/api/ask-docs",
+      "/api/save-result",
+      "/api/history",
       "/auth/github",
+      "/auth/google",
       "/auth/me",
       "/auth/logout",
     ],
@@ -110,6 +114,7 @@ app.use("/api/generate", generateRoute);
 app.use("/api/teach", teachRoute);
 app.use("/api/upload", uploadRoute);
 app.use("/api/ask-docs", askDocsRoute);
+app.use("/api", historyRoute); // /api/save-result + /api/history
 
 // ── 404 & Error Handlers ─────────────────────────────
 app.use((req, res) => {
@@ -126,13 +131,17 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`\n🚀 PrepMind Backend running at http://localhost:${PORT}`);
   console.log(`📡 Allowed origins: ${allowedOrigins.join(", ")}`);
-  const hasKey =
-    process.env.GEMINI_API_KEY &&
-    process.env.GEMINI_API_KEY !== "your_gemini_api_key_here";
-  if (!hasKey) {
-    console.warn("⚠️  GEMINI_API_KEY not set — AI routes will fail.");
-  } else {
-    console.log("✅  Gemini API key detected.");
-  }
+
+  const checks = [
+    ["GEMINI_API_KEY", "AI routes"],
+    ["GITHUB_CLIENT_ID", "GitHub OAuth"],
+    ["GOOGLE_CLIENT_ID", "Google OAuth"],
+    ["SUPABASE_URL", "Supabase DB"],
+  ];
+  checks.forEach(([key, label]) => {
+    const val = process.env[key];
+    const ok = val && !val.startsWith("your_");
+    console.log(ok ? `✅  ${label} configured` : `⚠️   ${label} — set ${key} in env vars`);
+  });
   console.log("");
 });
