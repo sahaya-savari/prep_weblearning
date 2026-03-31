@@ -1,21 +1,39 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
   <defs>
-    <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#06b6d4"/>
-      <stop offset="100%" stop-color="#7c3aed"/>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
     </linearGradient>
-    <linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0e7490"/>
-      <stop offset="100%" stop-color="#5b21b6"/>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#818cf8"/>
     </linearGradient>
   </defs>
-  <!-- Rounded square background -->
-  <rect width="64" height="64" rx="16" fill="url(#g2)"/>
-  <!-- Sparkle / brain icon — simplified P letter + spark -->
-  <!-- "P" shape representing PrepMind -->
-  <text x="12" y="46" font-family="Arial Black, sans-serif" font-size="40" font-weight="900" fill="url(#g1)">P</text>
-  <!-- Top-right sparkle dots -->
-  <circle cx="50" cy="14" r="3.5" fill="#22d3ee" opacity="0.9"/>
-  <circle cx="57" cy="22" r="2" fill="#a78bfa" opacity="0.8"/>
-  <circle cx="44" cy="8"  r="2" fill="#a78bfa" opacity="0.7"/>
+
+  <!-- Dark rounded background -->
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+
+  <!-- Brain outline paths -->
+  <!-- Left hemisphere -->
+  <path d="M20 38 C14 36 12 30 14 25 C16 19 22 17 26 20 C27 15 33 13 37 17"
+        stroke="url(#glow)" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+  <!-- Right hemisphere -->
+  <path d="M37 17 C42 14 48 18 48 24 C51 26 52 32 49 36 C47 40 42 41 38 39"
+        stroke="url(#glow)" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+  <!-- Bottom curve connecting hemispheres -->
+  <path d="M20 38 C22 44 28 46 32 44 C36 46 42 44 38 39"
+        stroke="url(#glow)" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+  <!-- Center divider -->
+  <line x1="32" y1="20" x2="32" y2="44" stroke="url(#glow)" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
+  <!-- Neural nodes -->
+  <circle cx="22" cy="28" r="2" fill="#22d3ee" opacity="0.9"/>
+  <circle cx="42" cy="28" r="2" fill="#818cf8" opacity="0.9"/>
+  <circle cx="32" cy="23" r="1.5" fill="#22d3ee" opacity="0.7"/>
+  <circle cx="28" cy="36" r="1.5" fill="#818cf8" opacity="0.7"/>
+  <circle cx="36" cy="36" r="1.5" fill="#22d3ee" opacity="0.7"/>
+
+  <!-- Sparkle top-right -->
+  <circle cx="53" cy="11" r="2.5" fill="#22d3ee" opacity="0.85"/>
+  <circle cx="59" cy="18" r="1.5" fill="#818cf8" opacity="0.7"/>
+  <circle cx="47" cy="7"  r="1.5" fill="#818cf8" opacity="0.6"/>
 </svg>
