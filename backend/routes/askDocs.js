@@ -14,7 +14,7 @@ router.post("/", async (req, res) => {
   if (!question) return res.status(400).json({ error: "question is required" });
 
   try {
-    const chunks = retrieve(question, documentIds, 5);
+    const chunks = await retrieve(question, documentIds, 5);
 
     if (chunks.length === 0) {
       return res.json({

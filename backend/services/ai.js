@@ -14,7 +14,7 @@ async function generate(prompt, reqModel = "gemini") {
       console.log("[AI] Explicit Ollama request responded ✓");
       return result;
     } catch (ollamaErr) {
-      console.error("[AI] Explict Ollama request failed.");
+      console.error("[AI] Explicit Ollama request failed.");
       throw new Error(`AI unavailable. Ollama: ${ollamaErr.message}`);
     }
   }
@@ -24,7 +24,16 @@ async function generate(prompt, reqModel = "gemini") {
     console.log("[AI] Gemini responded ✓");
     return result;
   } catch (geminiErr) {
-    console.warn(`[AI] Gemini failed (${geminiErr.message}), trying Ollama...`);
+    console.warn(`[AI] Gemini failed: ${geminiErr.message}`);
+    
+    // Safety check: Don't fallback to local Ollama on a remote production server unless configured
+    const isProd = process.env.NODE_ENV === "production";
+    const ollamaUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+    if (isProd && ollamaUrl.includes("localhost")) {
+       throw new Error(`AI unavailable. Gemini error: ${geminiErr.message}`);
+    }
+
+    console.log("[AI] Attempting Ollama fallback...");
     try {
       const result = await callOllama(prompt);
       console.log("[AI] Ollama fallback responded ✓");

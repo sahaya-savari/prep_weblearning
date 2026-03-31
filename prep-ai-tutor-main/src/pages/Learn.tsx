@@ -20,6 +20,10 @@ const SYLLABUS = [
     topics: ["Arrays & Strings", "Linked Lists", "Trees & Graphs", "Hash Tables", "Stacks & Queues"],
   },
   {
+    category: "Programming Languages",
+    topics: ["JavaScript Fundamentals", "Python Data Structures", "Java OOP Concepts", "C++ Memory Management"],
+  },
+  {
     category: "Algorithms",
     topics: ["Sorting & Searching", "Dynamic Programming", "Greedy Algorithms", "Graph Algorithms"],
   },
@@ -50,8 +54,8 @@ export default function LearnPage() {
     try {
       const data = await teachTopic({ topic, exam: selectedExam || undefined });
       setTopicData(data);
-    } catch {
-      setError("Backend not connected yet. Feature coming soon.");
+    } catch (err: any) {
+      setError(err.message || "Failed to load topic explanation. Please try again.");
     } finally {
       setLoading(false);
     }
