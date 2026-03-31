@@ -5,14 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAppContext } from "@/contexts/AppContext";
-import { useAuthContext } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Save, Sliders, GraduationCap, UserCircle, LogOut, Palette } from "lucide-react";
 import { motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 
 export default function SettingsPage() {
   const { selectedExam, setSelectedExam } = useAppContext();
-  const { session, user, signOut } = useAuthContext();
+  const { user, signOut } = useAuth();
   const [questionCount, setQuestionCount] = useState(localStorage.getItem("prepmind_qcount") || "5");
   const [difficulty, setDifficulty] = useState(localStorage.getItem("prepmind_difficulty") || "medium");
   const [theme, setTheme] = useState(localStorage.getItem("prepmind_theme") || "dark");
