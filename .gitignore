@@ -1,0 +1,15 @@
+# Root-level safety net — catches any .env files at the project root
+# Each subfolder (backend/, prep-ai-tutor-main/) has its own .gitignore too.
+
+# NEVER commit any .env file — keys go in deployment dashboards only
+.env
+.env.*
+!.env.example
+
+# macOS / Windows junk
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
