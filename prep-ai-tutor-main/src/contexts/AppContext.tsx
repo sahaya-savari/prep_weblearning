@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
+import { useAuth } from "./AuthContext";
+import { supabase } from "@/lib/supabase";
 
 export interface UploadedDocument {
   id: string;
@@ -23,20 +25,21 @@ interface AppState {
 
 const AppContext = createContext<AppState | undefined>(undefined);
 
-const STORAGE_KEY = "prepmind_exam";
-
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [selectedExam, setSelectedExamRaw] = useState<string>(
-    () => localStorage.getItem(STORAGE_KEY) || ""
-  );
+  const { user } = useAuth();
+  
+  const [selectedExam, setSelectedExamRaw] = useState<string>(() => localStorage.getItem("prepmind_exam") || "");
   const [examHistory, setExamHistory] = useState<string[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem("prepmind_history") || "[]");
-    } catch {
-      return [];
-    }
+    try { return JSON.parse(localStorage.getItem("prepmind_history") || "[]"); } catch { return []; }
+  });
+  const [completedTopics, setCompletedTopics] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("prepmind_completed") || "[]")); } catch { return new Set(); }
+  });
+  const [practiceStats, setPracticeStats] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("prepmind_stats") || '{"correct":0,"total":0,"sessions":0}'); } catch { return { correct: 0, total: 0, sessions: 0 }; }
   });
 
+  // Documents remain local-only for now
   const [documents, setDocuments] = useState<UploadedDocument[]>(() => {
     try {
       const stored = localStorage.getItem("prepmind_documents");
@@ -47,34 +50,70 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   });
 
-  const [completedTopics, setCompletedTopics] = useState<Set<string>>(() => {
-    try {
-      return new Set(JSON.parse(localStorage.getItem("prepmind_completed") || "[]"));
-    } catch {
-      return new Set();
+  // Load from Supabase on login
+  useEffect(() => {
+    if (!user) return;
+    
+    async function loadProfile() {
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', user?.id).single();
+      if (!error && data) {
+        if (data.selected_exam) {
+          setSelectedExamRaw(data.selected_exam);
+          localStorage.setItem("prepmind_exam", data.selected_exam);
+        }
+        if (data.exam_history) {
+          setExamHistory(data.exam_history);
+          localStorage.setItem("prepmind_history", JSON.stringify(data.exam_history));
+        }
+        if (data.completed_topics) {
+          setCompletedTopics(new Set(data.completed_topics));
+          localStorage.setItem("prepmind_completed", JSON.stringify(data.completed_topics));
+        }
+        if (data.practice_stats) {
+          setPracticeStats(data.practice_stats);
+          localStorage.setItem("prepmind_stats", JSON.stringify(data.practice_stats));
+        }
+      }
     }
-  });
-
-  const [practiceStats, setPracticeStats] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("prepmind_stats") || '{"correct":0,"total":0,"sessions":0}');
-    } catch {
-      return { correct: 0, total: 0, sessions: 0 };
-    }
-  });
+    loadProfile();
+  }, [user]);
 
   const setSelectedExam = useCallback((exam: string) => {
     setSelectedExamRaw(exam);
-    localStorage.setItem(STORAGE_KEY, exam);
-    setExamHistory((prev) => {
-      const next = [exam, ...prev.filter((e) => e !== exam)].slice(0, 10);
+    localStorage.setItem("prepmind_exam", exam);
+    
+    setExamHistory(prev => {
+      const next = [exam, ...prev.filter(e => e !== exam)].slice(0, 10);
       localStorage.setItem("prepmind_history", JSON.stringify(next));
+      if (user) supabase.from('profiles').update({ selected_exam: exam, exam_history: next }).eq('id', user.id).then();
       return next;
     });
-  }, []);
+  }, [user]);
+
+  const toggleTopicComplete = useCallback((topic: string) => {
+    setCompletedTopics(prev => {
+      const next = new Set(prev);
+      if (next.has(topic)) next.delete(topic);
+      else next.add(topic);
+      
+      const arr = [...next];
+      localStorage.setItem("prepmind_completed", JSON.stringify(arr));
+      if (user) supabase.from('profiles').update({ completed_topics: arr }).eq('id', user.id).then();
+      return next;
+    });
+  }, [user]);
+
+  const updatePracticeStats = useCallback((correct: number, total: number) => {
+    setPracticeStats((prev: any) => {
+      const next = { correct: prev.correct + correct, total: prev.total + total, sessions: prev.sessions + 1 };
+      localStorage.setItem("prepmind_stats", JSON.stringify(next));
+      if (user) supabase.from('profiles').update({ practice_stats: next }).eq('id', user.id).then();
+      return next;
+    });
+  }, [user]);
 
   const addDocument = useCallback((doc: UploadedDocument) => {
-    setDocuments((prev) => {
+    setDocuments(prev => {
       const next = [...prev, doc];
       localStorage.setItem("prepmind_documents", JSON.stringify(next));
       return next;
@@ -82,27 +121,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const removeDocument = useCallback((id: string) => {
-    setDocuments((prev) => {
-      const next = prev.filter((d) => d.id !== id);
+    setDocuments(prev => {
+      const next = prev.filter(d => d.id !== id);
       localStorage.setItem("prepmind_documents", JSON.stringify(next));
-      return next;
-    });
-  }, []);
-
-  const toggleTopicComplete = useCallback((topic: string) => {
-    setCompletedTopics((prev) => {
-      const next = new Set(prev);
-      if (next.has(topic)) next.delete(topic);
-      else next.add(topic);
-      localStorage.setItem("prepmind_completed", JSON.stringify([...next]));
-      return next;
-    });
-  }, []);
-
-  const updatePracticeStats = useCallback((correct: number, total: number) => {
-    setPracticeStats((prev: any) => {
-      const next = { correct: prev.correct + correct, total: prev.total + total, sessions: prev.sessions + 1 };
-      localStorage.setItem("prepmind_stats", JSON.stringify(next));
       return next;
     });
   }, []);
