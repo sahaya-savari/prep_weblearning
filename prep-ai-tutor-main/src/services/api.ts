@@ -6,10 +6,20 @@ const API_BASE =
 
 const getModel = () => localStorage.getItem("prepmind_model") || "gemini";
 
+// ── Abort controller map — one active request per endpoint ───
+const activeControllers = new Map<string, AbortController>();
+
 // ── Core request helper ───────────────────────────────
 async function request<T>(endpoint: string, options?: RequestInit, timeoutMs = 55000): Promise<T> {
-  // Abort controller for timeout (handles Render cold starts up to 50s)
+  // Cancel any in-flight request to the same endpoint
+  if (activeControllers.has(endpoint)) {
+    activeControllers.get(endpoint)!.abort();
+  }
+
   const controller = new AbortController();
+  activeControllers.set(endpoint, controller);
+
+  // Hard timeout fallback (handles Render cold starts up to 50s)
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   // Inject selected AI model into POST JSON payloads automatically
@@ -31,9 +41,9 @@ async function request<T>(endpoint: string, options?: RequestInit, timeoutMs = 5
     });
 
     clearTimeout(timer);
+    activeControllers.delete(endpoint);
 
     if (!res.ok) {
-      // Parse error body — backend uses "error" key, some use "message"
       const errBody = await res.json().catch(() => ({}));
       const errMsg = errBody.error || errBody.message || `Server error ${res.status}`;
       throw new Error(errMsg);
@@ -42,6 +52,7 @@ async function request<T>(endpoint: string, options?: RequestInit, timeoutMs = 5
     return res.json() as Promise<T>;
   } catch (err: any) {
     clearTimeout(timer);
+    activeControllers.delete(endpoint);
     if (err.name === "AbortError") {
       throw new Error("Request timed out. The server may be starting up — please try again in a moment.");
     }

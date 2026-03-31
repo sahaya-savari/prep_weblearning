@@ -27,10 +27,14 @@ async function callGeminiModel(apiKey, model, prompt) {
     generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
   };
 
-  const res = await axios.post(url, body, {
-    headers: { "Content-Type": "application/json" },
-    timeout: 28000,
-  });
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error("Gemini request timed out after 20s")), 20000)
+  );
+
+  const res = await Promise.race([
+    axios.post(url, body, { headers: { "Content-Type": "application/json" } }),
+    timeout,
+  ]);
 
   const candidate = res.data?.candidates?.[0];
   if (!candidate) throw new Error("Gemini returned no candidate");

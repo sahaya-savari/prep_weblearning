@@ -61,11 +61,14 @@ app.get("/", (req, res) => {
 
 const rateLimit = require("express-rate-limit");
 
-// ── Rate Limiting ────────────────────────────────────
+// ── Health check (no rate limiting) ─────────────────
+app.get("/health", (_req, res) => res.json({ status: "ok" }));
+
+// ── Rate Limiting (60 req/min per IP) ────────────────
 const apiLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 30, // Limit each IP to 30 requests per `window` (here, per minute)
-  message: { error: "Too many requests from this IP, please try again after a minute" },
+  windowMs: 60 * 1000,
+  max: 60,
+  message: { error: "Too many requests. Please wait a moment and try again." },
   standardHeaders: true,
   legacyHeaders: false,
 });
