@@ -8,12 +8,21 @@ const API_BASE =
 const getModel = () => localStorage.getItem("prepmind_model") || "gemini";
 
 // ── Get Supabase JWT for authenticated requests ───────
+// Returns null if guest (not logged in)
 async function getSupabaseToken(): Promise<string | null> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     return session?.access_token ?? null;
   } catch {
     return null;
+  }
+}
+
+// Thrown by protected calls when guest tries to use them
+export class AuthRequiredError extends Error {
+  constructor() {
+    super("LOGIN_REQUIRED");
+    this.name = "AuthRequiredError";
   }
 }
 
@@ -180,6 +189,8 @@ export const askFromDocs = async (
 };
 
 // ── Practice History (Supabase-backed) ───────────────
+// These routes require a logged-in Supabase user.
+// Guests will get AuthRequiredError — handle it in the UI.
 export interface PracticeResult {
   topic: string;
   score: number;
@@ -195,17 +206,22 @@ export interface HistoryEntry {
 
 export const saveResult = async (payload: PracticeResult): Promise<{ success: boolean }> => {
   const token = await getSupabaseToken();
+  // Guest guard — do NOT hit the backend
+  if (!token) throw new AuthRequiredError();
+
   return request<{ success: boolean }>("/api/save-result", {
     method: "POST",
     body: JSON.stringify(payload),
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers: { Authorization: `Bearer ${token}` },
   });
 };
 
 export const getHistory = async (): Promise<{ success: boolean; history: HistoryEntry[] }> => {
   const token = await getSupabaseToken();
+  // Guest guard — return empty instead of erroring
+  if (!token) return { success: true, history: [] };
+
   return request<{ success: boolean; history: HistoryEntry[] }>("/api/history", {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers: { Authorization: `Bearer ${token}` },
   });
 };
-

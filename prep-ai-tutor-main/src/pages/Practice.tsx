@@ -1,16 +1,22 @@
 import { useState } from "react";
 import { useAppContext } from "@/contexts/AppContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LoadingSpinner, EmptyState } from "@/components/shared/StatusComponents";
-import { generateMCQs, type MCQQuestion } from "@/services/api";
-import { BookOpen, CheckCircle2, XCircle, ArrowRight, RotateCcw, BrainCircuit } from "lucide-react";
+import { generateMCQs, saveResult, AuthRequiredError, type MCQQuestion } from "@/services/api";
+import { LoginModal } from "@/components/LoginModal";
+import { BookOpen, CheckCircle2, XCircle, ArrowRight, RotateCcw, BrainCircuit, LogIn, CloudOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShareActions } from "@/components/ShareActions";
+import { useToast } from "@/hooks/use-toast";
 
 export default function PracticePage() {
   const { selectedExam, updatePracticeStats, selectedAiModel } = useAppContext();
+  const { user } = useAuth();
+  const { toast } = useToast();
+
   const [questions, setQuestions] = useState<MCQQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
@@ -19,6 +25,9 @@ export default function PracticePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isFinished, setIsFinished] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   const currentQ = questions[currentIndex];
 
@@ -34,6 +43,7 @@ export default function PracticePage() {
       setRevealed(false);
       setScore({ correct: 0, total: 0 });
       setIsFinished(false);
+      setSaved(false);
     } catch {
       setError("Backend connection failed. Feature coming soon.");
     } finally {
@@ -64,9 +74,28 @@ export default function PracticePage() {
     }
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
     updatePracticeStats(score.correct, score.total);
     setIsFinished(true);
+
+    // Auto-save for logged-in users
+    if (user && selectedExam) {
+      setSaving(true);
+      try {
+        await saveResult({ topic: selectedExam, score: score.correct });
+        setSaved(true);
+        toast({ title: "Result saved ✅", description: "Your score has been saved to your history." });
+      } catch (err) {
+        if (err instanceof AuthRequiredError) {
+          // Shouldn't happen since we checked user — but handle gracefully
+          setSaved(false);
+        } else {
+          toast({ title: "Save failed", description: "Could not save result. Try again later.", variant: "destructive" });
+        }
+      } finally {
+        setSaving(false);
+      }
+    }
   };
 
   const getMarkdownReport = () => {
@@ -91,6 +120,8 @@ export default function PracticePage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 pb-20">
+      <LoginModal open={showLoginModal} onOpenChange={setShowLoginModal} />
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -153,14 +184,38 @@ export default function PracticePage() {
               <h2 className="text-2xl font-bold tracking-tight">Practice Complete!</h2>
               <p className="text-muted-foreground mt-1">You scored {score.correct} out of {score.total}</p>
             </div>
+
+            {/* Save status / Login prompt */}
+            {user ? (
+              <div className="flex items-center justify-center gap-2 text-sm">
+                {saving && <span className="text-muted-foreground animate-pulse">Saving result…</span>}
+                {saved && <span className="text-success font-medium">✅ Result saved to your history</span>}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2 p-4 rounded-xl bg-muted/20 border border-dashed border-border/60">
+                <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                  <CloudOff className="h-4 w-4" />
+                  <span>Progress not saved — you're in guest mode</span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="rounded-xl gap-2 mt-1 border-primary/40 text-primary hover:bg-primary/10"
+                  onClick={() => setShowLoginModal(true)}
+                >
+                  <LogIn className="h-4 w-4" />
+                  Sign in to save your results
+                </Button>
+              </div>
+            )}
             
-            <div className="max-w-md mx-auto pt-4 flex flex-col gap-4">
+            <div className="max-w-md mx-auto pt-2 flex flex-col gap-4">
                <ShareActions 
                  content={getMarkdownReport()} 
                  filename={`practice-${selectedExam.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}-${Date.now()}.md`} 
                  subject={`My PrepMind Practice Score: ${score.correct}/${score.total}`} 
                />
-               <Button onClick={handleGenerate} className="w-full btn-glow rounded-xl mt-4">
+               <Button onClick={handleGenerate} className="w-full btn-glow rounded-xl mt-2">
                  Start a New Set
                </Button>
             </div>
