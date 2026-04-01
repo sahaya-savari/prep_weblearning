@@ -25,7 +25,12 @@ export default function TeachPage() {
     setError("");
     setResult(null);
     try {
-      const data = await teachTopic({ topic: topic.trim(), exam: selectedExam || undefined });
+      const globalDiff = localStorage.getItem("lastDifficulty") || "medium";
+      const data = await teachTopic({ 
+        topic: topic.trim(), 
+        exam: selectedExam || undefined,
+        difficulty: globalDiff 
+      });
       setResult(data);
     } catch {
       setError("Backend connection failed. Please ensure your backend is actively running.");

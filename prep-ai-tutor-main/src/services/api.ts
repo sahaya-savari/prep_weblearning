@@ -139,6 +139,7 @@ export const sendChatMessage = async (payload: ChatPayload): Promise<ChatRespons
 export interface TeachPayload {
   topic: string;
   exam?: string;
+  difficulty?: string;
 }
 
 export interface TeachResponse {

@@ -4,69 +4,117 @@ const { generate } = require("../services/ai");
 
 /**
  * POST /api/teach
- * Body: { topic, exam?, model? }
- * Returns: { success, fallback?, explanation, keyPoints, examples, formulas? }
+ * Body: { topic, exam?, difficulty?, model? }
  */
 router.post("/", async (req, res) => {
-  const { topic, exam = "Computer Science", model = "gemini" } = req.body;
+  const { topic, exam = "Computer Science", difficulty = "medium", model = "gemini" } = req.body;
 
   if (!topic || typeof topic !== "string" || topic.trim().length === 0) {
-    return res.status(400).json({ success: false, error: "topic is required" });
+    return res.status(400).json({ success: false, message: "topic is required" });
   }
 
   const cleanTopic = topic.trim().slice(0, 200);
 
-  const prompt = `You are PrepMind AI, an expert teacher for ${exam} exams.
+  let difficultyLogic = "";
+  if (difficulty === "easy") difficultyLogic = "Use simple language, basic examples, and direct questions.";
+  else if (difficulty === "hard") difficultyLogic = "Use deep conceptual explanations, cover edge cases, and include tricky conceptual traps.";
+  else difficultyLogic = "Use moderate explanations and slightly tricky applied questions.";
 
-Teach the topic: "${cleanTopic}"
+  const prompt = `SYSTEM PROMPT:
 
-Respond with ONLY a valid JSON object (no markdown, no code block):
-{
-  "explanation": "A clear, detailed multi-paragraph explanation of the topic (200-400 words). Use simple language, build intuition first, then go into depth.",
-  "keyPoints": [
-    "Key point 1 — short and memorable",
-    "Key point 2",
-    "Key point 3",
-    "Key point 4",
-    "Key point 5"
-  ],
-  "examples": [
-    "Example 1: A concrete real-world example with some detail.",
-    "Example 2: Another example showing a different aspect."
-  ],
-  "formulas": [
-    "Formula or definition if applicable (leave as empty array [] if none)"
-  ]
-}
+You are an expert AI tutor for ${exam}.
+Generate high-quality educational content based ONLY on the given topic.
 
-Make it engaging, educational, and exam-focused.`;
+STRICT RULES:
+* No hallucination
+* No assumptions
+* Keep explanations clear and structured
+* Output must follow EXACT format below
+* ${difficultyLogic}
 
-  try {
-    const aiResult = await generate(prompt, model, "teach", cleanTopic);
+FORMAT:
 
-    // Fallback content already has the correct shape
-    if (aiResult.fallback) {
-      return res.json({ success: true, fallback: true, ...aiResult });
+Definition:
+...
+
+Key Concepts:
+- ...
+- ...
+
+Example:
+...
+
+Common Mistakes:
+- ...
+
+Practice Questions:
+1. ...
+   Answer: ...
+
+---
+USER INPUT:
+Topic: ${cleanTopic}
+Difficulty: ${difficulty}
+`;
+
+  let finalResult = null;
+  let isFallback = false;
+
+  // Retry Loop + Format Validation
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const aiResult = await generate(prompt, model, "teach", cleanTopic);
+
+      if (aiResult.fallback) {
+        throw new Error("AI invoked generation fallback. Will drop straight to static generator.");
+      }
+
+      const raw = aiResult.text;
+
+      // Extract raw sections dynamically based on exact prompt format
+      const definitionMatch = raw.match(/Definition:([\s\S]*?)(?=Key Concepts:|$)/i);
+      const keysMatch = raw.match(/Key Concepts:([\s\S]*?)(?=Example:|$)/i);
+      const exampleMatch = raw.match(/Example:([\s\S]*?)(?=Common Mistakes:|$)/i);
+      const mistakesMatch = raw.match(/Common Mistakes:([\s\S]*?)(?=Practice Questions:|$)/i);
+      const pracMatch = raw.match(/Practice Questions:([\s\S]*?)$/i);
+
+      if (!definitionMatch || !pracMatch) {
+         throw new Error("Missing critical formatting sections (Definition or Practice Questions)");
+      }
+
+      // Format cleaning
+      const definition = definitionMatch[1].trim();
+      const example = exampleMatch ? exampleMatch[1].trim() : "";
+      
+      const keyConcepts = keysMatch ? keysMatch[1].split('\\n').filter(l => l.trim().startsWith('-')).map(l => l.replace(/^-/, '').trim()) : [];
+      const mistakes = mistakesMatch ? mistakesMatch[1].split('\\n').filter(l => l.trim().startsWith('-')).map(l => l.replace(/^-/, '').trim()) : [];
+      const practiceQs = pracMatch[1].trim();
+
+      // Safely map back to legacy UI expected props { explanation, keyPoints, examples, formulas }
+      finalResult = {
+        explanation: `${definition}\n\n### Common Mistakes\n${mistakes.map(m => `- ${m}`).join('\n')}`,
+        keyPoints: keyConcepts.length > 0 ? keyConcepts : ["No distinct key concepts found."],
+        examples: [example, practiceQs].filter(Boolean)
+      };
+
+      console.info(`[AI] Teach generated successfully for ${cleanTopic}`);
+      break; // escape loop
+    } catch (err) {
+      console.error(`[AI] Teach attempt ${attempt} failed: ${err.message}`);
+      if (attempt === 2) {
+        isFallback = true;
+      }
     }
-
-    const raw = aiResult.text;
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("AI did not return valid JSON object");
-
-    const result = JSON.parse(jsonMatch[0]);
-
-    if (!result.explanation || !Array.isArray(result.keyPoints)) {
-      throw new Error("Invalid response structure from AI");
-    }
-
-    return res.json({ success: true, fallback: false, ...result });
-  } catch (err) {
-    console.error("[/api/teach]", err.message);
-    // Last-resort fallback instead of crashing
-    const { generateFallbackContent } = require("../services/ai");
-    const fallback = generateFallbackContent("teach", topic);
-    return res.json({ success: true, fallback: true, ...fallback });
   }
+
+  // Final Fallback if loop failed completely
+  if (!finalResult) {
+     const { generateFallbackContent } = require("../services/ai");
+     const fallback = generateFallbackContent("teach", cleanTopic);
+     return res.json({ success: true, fallback: true, ...fallback });
+  }
+
+  return res.json({ success: true, fallback: isFallback, ...finalResult });
 });
 
 module.exports = router;
