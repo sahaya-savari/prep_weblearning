@@ -35,8 +35,9 @@ export function getUserProfile(): UserProfile {
   
   if (!profileRaw) {
     // Legacy mapping fallback ensuring old stats are safely merged, never overwritten blindingly.
-    const oldScores = safeParse("scores", []);
-    const oldStats = safeParse("topicStats", {});
+    const rawScores = safeParse<HistoryEntry[]>("scores", []);
+    const oldScores = Array.isArray(rawScores) ? rawScores.slice(-MAX_HISTORY) : [];
+    const oldStats = safeParse<Record<string, TopicStat>>("topicStats", {});
     const lastDiff = localStorage.getItem("lastDifficulty") || "medium";
 
     const defaultProfile: UserProfile = {

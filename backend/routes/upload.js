@@ -40,9 +40,8 @@ async function softAuth(req, _res, next) {
  * Returns: { documentId, name }
  */
 router.post("/", softAuth, upload.single("file"), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-
   try {
+    if (!req.file) return res.status(400).json({ success: false, message: "No file uploaded" });
     const originalName = req.file.originalname;
     const userId = req.supabaseUser?.id ?? null; // null for guests — stored as anonymous
 
@@ -51,7 +50,7 @@ router.post("/", softAuth, upload.single("file"), async (req, res) => {
     const chunks = chunkText(text);
 
     if (chunks.length === 0) {
-      return res.status(422).json({ error: "File appears to be empty or unreadable" });
+      return res.status(422).json({ success: false, message: "File appears to be empty or unreadable" });
     }
 
     const documentId = await addDocument(originalName, chunks, userId);
@@ -59,8 +58,8 @@ router.post("/", softAuth, upload.single("file"), async (req, res) => {
     console.info(`[/api/upload] "${originalName}" → ${chunks.length} chunks, user=${userId ?? "guest"}`);
     res.json({ documentId, name: originalName });
   } catch (err) {
-    console.error("[/api/upload]", err.message);
-    res.status(500).json({ error: err.message || "File processing failed" });
+    console.error("[/api/upload] Global error:", err.message);
+    res.status(500).json({ success: false, message: err.message || "File processing failed" });
   }
 });
 

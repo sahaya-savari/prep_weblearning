@@ -9,21 +9,22 @@ const { retrieve } = require("../services/rag");
  * Returns: { success, fallback?, response, sources? }
  */
 router.post("/", async (req, res) => {
-  const {
-    message,
-    exam = "General",
-    chatHistory = [],
-    notebookMode = false,
-    model = "gemini",
-  } = req.body;
-
-  if (!message || typeof message !== "string" || message.trim().length === 0) {
-    return res.status(400).json({ success: false, error: "message is required" });
-  }
-
-  const cleanMessage = message.trim().slice(0, 2000);
-
   try {
+    const {
+      message,
+      exam = "General",
+      chatHistory = [],
+      notebookMode = false,
+      model = "gemini",
+    } = req.body;
+
+    if (!message || typeof message !== "string" || message.trim().length === 0) {
+      return res.status(400).json({ success: false, message: "message is required" });
+    }
+
+    const cleanMessage = message.trim().slice(0, 2000);
+
+    try {
     let contextSection = "";
     let sources = [];
 
@@ -75,11 +76,15 @@ Assistant:`;
       response: aiResult.text,
       ...(sources.length > 0 && { sources }),
     });
-  } catch (err) {
-    console.error("[/api/chat]", err.message);
-    const { generateFallbackContent } = require("../services/ai");
-    const fallback = generateFallbackContent("chat", cleanMessage);
-    return res.json({ success: true, fallback: true, response: fallback.response });
+    } catch (err) {
+      console.error("[/api/chat] Engine failure:", err.message);
+      const { generateFallbackContent } = require("../services/ai");
+      const fallback = generateFallbackContent("chat", cleanMessage);
+      return res.json({ success: true, fallback: true, response: fallback.response });
+    }
+  } catch (globalErr) {
+    console.error(`[/api/chat] Global failure: ${globalErr.message}`);
+    return res.status(500).json({ success: false, message: globalErr.message });
   }
 });
 

@@ -9,11 +9,9 @@ const { retrieve } = require("../services/rag");
  * Returns: { answer, sources }
  */
 router.post("/", async (req, res) => {
-  const { question, documentIds = [] } = req.body;
-
-  if (!question) return res.status(400).json({ error: "question is required" });
-
   try {
+    const { question, documentIds = [] } = req.body;
+    if (!question) return res.status(400).json({ success: false, message: "question is required" });
     const chunks = await retrieve(question, documentIds, 5);
 
     if (chunks.length === 0) {
@@ -51,8 +49,8 @@ Answer (be thorough and educational):`;
 
     res.json({ answer, sources });
   } catch (err) {
-    console.error("[/api/ask-docs]", err.message);
-    res.status(500).json({ error: err.message || "Failed to query documents" });
+    console.error("[/api/ask-docs] Global error:", err.message);
+    res.status(500).json({ success: false, message: err.message || "Failed to query documents" });
   }
 });
 

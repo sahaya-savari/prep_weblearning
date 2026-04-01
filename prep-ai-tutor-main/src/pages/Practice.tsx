@@ -170,7 +170,7 @@ export default function PracticePage() {
     // Adaptive Auto-Scaling logic using safe raw score math bounded limits
     const recentScores = profile.history.filter(h => h.topic === selectedExam && h.difficulty === difficulty).slice(-3);
     if (recentScores.length >= 3) {
-       const avg = recentScores.reduce((acc, curr) => acc + curr.score, 0) / 3;
+       const avg = recentScores.reduce((acc, curr) => acc + (curr.total > 0 ? (curr.score / curr.total) * 5 : 0), 0) / 3;
        const levels = ["easy", "medium", "hard"];
        let index = levels.indexOf(difficulty);
 
