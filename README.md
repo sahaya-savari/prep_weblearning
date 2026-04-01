@@ -16,6 +16,18 @@ PrepMind AI is built with a resilient architecture that:
 
 ---
 
+## 🔗 Live Demo
+- **Frontend App:** [PrepMind AI on Vercel](https://prep-weblearning.vercel.app/)
+- **Backend API:** [PrepMind AI Server on Render](https://prepmind-backend.onrender.com)
+
+## 📸 Screenshots
+*(Coming Soon)*
+- 🎯 Quiz Interface & Adaptive Engine
+- 📊 Dashboard Analytics & Weak Topic Modeling
+- ⚠️ Graceful Offline Fallback Mode in Action
+
+---
+
 ## 2. Key Features
 
 **🤖 Dynamic AI Quiz Generation**
