@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { LoadingSpinner } from "@/components/shared/StatusComponents";
 import { useAppContext, type UploadedDocument } from "@/contexts/AppContext";
-import { askFromDocs } from "@/services/api";
+import { uploadDocument, askFromDocs } from "@/services/api";
 import { FolderOpen, Upload, FileText, Send, Trash2, Bot, Sparkles, CloudUpload } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -45,18 +45,24 @@ export default function KnowledgeBasePage() {
     }
     setUploading(true);
     setError("");
-    // Simulate upload delay
-    await new Promise((r) => setTimeout(r, 1200));
-    const doc: UploadedDocument = {
-      id: crypto.randomUUID(),
-      name: file.name,
-      size: file.size,
-      uploadedAt: new Date(),
-      type: ext,
-    };
-    addDocument(doc);
-    setUploading(false);
-    if (fileRef.current) fileRef.current.value = "";
+    try {
+      // Real upload — sends file to backend, processes, stores in Supabase
+      const result = await uploadDocument(file);
+      const doc: UploadedDocument = {
+        id: result.documentId,      // real Supabase document ID
+        name: result.name,
+        size: file.size,
+        uploadedAt: new Date(),
+        type: ext,
+      };
+      addDocument(doc);
+    } catch (err: any) {
+      console.error("[KnowledgeBase] Upload failed:", err.message);
+      setError(err.message || "Upload failed. Please try again.");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
   }, [addDocument]);
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

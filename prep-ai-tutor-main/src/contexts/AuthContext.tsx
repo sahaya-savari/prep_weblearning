@@ -38,35 +38,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const loginWithGoogle = async () => {
-    await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: window.location.origin },
     });
+    if (error) {
+      console.error("[Auth] Google OAuth error:", error.message);
+      throw error;
+    }
   };
 
   const loginWithGithub = async () => {
     // Request repo scope to allow pushing markdown files
-    await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: "github",
       options: {
         redirectTo: window.location.origin,
-        scopes: "repo", 
+        scopes: "repo",
       },
     });
+    if (error) {
+      console.error("[Auth] GitHub OAuth error:", error.message);
+      throw error;
+    }
   };
 
   const loginWithEmail = async (email: string) => {
     // We send a magic link for simplicity and better UX instead of forcing password creation
-    await supabase.auth.signInWithOtp({
+    const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
         emailRedirectTo: window.location.origin,
       },
     });
+    if (error) {
+      console.error("[Auth] Magic link error:", error.message);
+      throw error;
+    }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+    if (error) console.error("[Auth] Sign-out error:", error.message);
   };
 
   return (

@@ -74,43 +74,67 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Load from Supabase on login
   useEffect(() => {
     if (!user) return;
-    
+
     async function loadProfile() {
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', user?.id).single();
-      if (!error && data) {
-        if (data.selected_exam) {
-          setSelectedExamRaw(data.selected_exam);
-          localStorage.setItem("prepmind_exam", data.selected_exam);
-        }
-        if (data.exam_history) {
-          setExamHistory(data.exam_history);
-          localStorage.setItem("prepmind_history", JSON.stringify(data.exam_history));
-        }
-        if (data.completed_topics) {
-          setCompletedTopics(new Set(data.completed_topics));
-          localStorage.setItem("prepmind_completed", JSON.stringify(data.completed_topics));
-        }
-        if (data.practice_stats) {
-          setPracticeStats(data.practice_stats);
-          localStorage.setItem("prepmind_stats", JSON.stringify(data.practice_stats));
-        }
-        if (data.chat_history) {
-          setChatHistory(data.chat_history);
-          localStorage.setItem("prepmind_chat", JSON.stringify(data.chat_history));
-        }
+      // .maybeSingle() returns null (not an error) when no row exists yet
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', user!.id).maybeSingle();
+      if (error) {
+        console.error('[Supabase] loadProfile error:', error.message);
+        return;
+      }
+      if (!data) return; // new user — profile not yet created (trigger will handle it)
+
+      if (data.selected_exam) {
+        setSelectedExamRaw(data.selected_exam);
+        localStorage.setItem("prepmind_exam", data.selected_exam);
+      }
+      if (data.exam_history) {
+        setExamHistory(data.exam_history);
+        localStorage.setItem("prepmind_history", JSON.stringify(data.exam_history));
+      }
+      if (data.completed_topics) {
+        setCompletedTopics(new Set(data.completed_topics));
+        localStorage.setItem("prepmind_completed", JSON.stringify(data.completed_topics));
+      }
+      if (data.practice_stats) {
+        setPracticeStats(data.practice_stats);
+        localStorage.setItem("prepmind_stats", JSON.stringify(data.practice_stats));
+      }
+      if (data.chat_history) {
+        setChatHistory(data.chat_history);
+        localStorage.setItem("prepmind_chat", JSON.stringify(data.chat_history));
       }
     }
-    loadProfile();
+
+    // Ensure users + profiles rows exist for this user (idempotent upsert)
+    async function ensureProfile() {
+      const { error: uErr } = await supabase
+        .from('users')
+        .upsert({ id: user!.id, email: user!.email }, { onConflict: 'id', ignoreDuplicates: true });
+      if (uErr) console.error('[Supabase] ensureProfile users upsert:', uErr.message);
+
+      const { error: pErr } = await supabase
+        .from('profiles')
+        .upsert({ id: user!.id }, { onConflict: 'id', ignoreDuplicates: true });
+      if (pErr) console.error('[Supabase] ensureProfile profiles upsert:', pErr.message);
+    }
+
+    ensureProfile().then(loadProfile);
   }, [user]);
 
   const setSelectedExam = useCallback((exam: string) => {
     setSelectedExamRaw(exam);
     localStorage.setItem("prepmind_exam", exam);
-    
+
     setExamHistory(prev => {
       const next = [exam, ...prev.filter(e => e !== exam)].slice(0, 10);
       localStorage.setItem("prepmind_history", JSON.stringify(next));
-      if (user) supabase.from('profiles').update({ selected_exam: exam, exam_history: next }).eq('id', user.id).then();
+      if (user) {
+        supabase.from('profiles')
+          .update({ selected_exam: exam, exam_history: next })
+          .eq('id', user.id)
+          .then(({ error }) => { if (error) console.error('[Supabase] setSelectedExam:', error.message); });
+      }
       return next;
     });
   }, [user]);
@@ -120,10 +144,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const next = new Set(prev);
       if (next.has(topic)) next.delete(topic);
       else next.add(topic);
-      
+
       const arr = [...next];
       localStorage.setItem("prepmind_completed", JSON.stringify(arr));
-      if (user) supabase.from('profiles').update({ completed_topics: arr }).eq('id', user.id).then();
+      if (user) {
+        supabase.from('profiles')
+          .update({ completed_topics: arr })
+          .eq('id', user.id)
+          .then(({ error }) => { if (error) console.error('[Supabase] toggleTopicComplete:', error.message); });
+      }
       return next;
     });
   }, [user]);
@@ -132,7 +161,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPracticeStats((prev: any) => {
       const next = { correct: prev.correct + correct, total: prev.total + total, sessions: prev.sessions + 1 };
       localStorage.setItem("prepmind_stats", JSON.stringify(next));
-      if (user) supabase.from('profiles').update({ practice_stats: next }).eq('id', user.id).then();
+      if (user) {
+        supabase.from('profiles')
+          .update({ practice_stats: next })
+          .eq('id', user.id)
+          .then(({ error }) => { if (error) console.error('[Supabase] updatePracticeStats:', error.message); });
+      }
       return next;
     });
   }, [user]);
@@ -140,7 +174,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const saveChatHistory = useCallback((history: ChatMessage[]) => {
     setChatHistory(history);
     localStorage.setItem("prepmind_chat", JSON.stringify(history));
-    if (user) supabase.from('profiles').update({ chat_history: history }).eq('id', user.id).then();
+    if (user) {
+      supabase.from('profiles')
+        .update({ chat_history: history })
+        .eq('id', user.id)
+        .then(({ error }) => { if (error) console.error('[Supabase] saveChatHistory:', error.message); });
+    }
   }, [user]);
 
   const addDocument = useCallback((doc: UploadedDocument) => {

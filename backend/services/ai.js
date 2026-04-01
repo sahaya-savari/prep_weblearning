@@ -69,10 +69,7 @@ async function generate(prompt, reqModel = "gemini", type = "generic", topic = "
     // Only attempt Ollama if not pointed at localhost in production
     const isProd = process.env.NODE_ENV === "production";
     const ollamaUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-    if (isProd && ollamaUrl.includes("localhost")) {
-      // Skip Ollama in cloud production — fall through to Gemini
-      console.log("[AI] Ollama skipped in production (localhost). Using Gemini.");
-    } else {
+    if (!(isProd && ollamaUrl.includes("localhost"))) {
       try {
         const axios = require("axios");
         const res = await axios.post(`${ollamaUrl}/api/generate`, {
@@ -82,7 +79,7 @@ async function generate(prompt, reqModel = "gemini", type = "generic", topic = "
         }, { timeout: 60000 });
         return { text: res.data.response, fallback: false };
       } catch (err) {
-        console.warn(`[AI] Ollama failed: ${err.message}`);
+        console.error(`[AI] Ollama failed: ${err.message}`);
       }
     }
   }
@@ -103,7 +100,6 @@ async function generate(prompt, reqModel = "gemini", type = "generic", topic = "
     }
 
     // Quota or network issue — return graceful fallback
-    console.log(`[AI] Returning fallback content for type="${type}"`);
     return { ...generateFallbackContent(type, topic), text: null };
   }
 }

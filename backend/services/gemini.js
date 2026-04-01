@@ -63,7 +63,6 @@ ${rawPrompt}`;
 
   // Return from cache if available
   if (cache.has(cacheKey)) {
-    console.log("[Gemini] Cache hit ✓");
     return { text: cache.get(cacheKey), fallback: false };
   }
 
@@ -73,10 +72,8 @@ ${rawPrompt}`;
   for (const model of GEMINI_MODELS) {
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        console.log(`[Gemini] Trying ${model} (attempt ${attempt})`);
         const text = await callGeminiModel(apiKey, model, optimizedPrompt);
         cache.set(cacheKey, text);
-        console.log(`[Gemini] ${model} responded ✓`);
         return { text, fallback: false };
       } catch (err) {
         const status = err?.response?.status;

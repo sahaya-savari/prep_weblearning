@@ -108,8 +108,9 @@ app.listen(PORT, () => {
   console.log(`📡 Allowed origins: ${allowedOrigins.join(", ")}`);
 
   const checks = [
-    ["GEMINI_API_KEY", "AI routes"],
-    ["SUPABASE_URL", "Supabase DB"],
+    ["GEMINI_API_KEY", "Gemini AI"],
+    ["SUPABASE_URL", "Supabase DB URL"],
+    ["SUPABASE_SERVICE_KEY", "Supabase Auth (service_role key)"],
   ];
   checks.forEach(([key, label]) => {
     const val = process.env[key];

@@ -11,6 +11,7 @@ export default function LoginPage({ onGuest }: LoginPageProps) {
   const [email, setEmail] = useState("");
   const [emailSent, setEmailSent] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
+  const [emailError, setEmailError] = useState("");
   const [googleLoading, setGoogleLoading] = useState(false);
   const [githubLoading, setGithubLoading] = useState(false);
 
@@ -18,11 +19,13 @@ export default function LoginPage({ onGuest }: LoginPageProps) {
     e.preventDefault();
     if (!email) return;
     setEmailLoading(true);
+    setEmailError("");
     try {
       await loginWithEmail(email);
       setEmailSent(true);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error("[Login] Email magic link failed:", err.message);
+      setEmailError(err.message || "Could not send magic link. Please try again.");
     } finally {
       setEmailLoading(false);
     }
@@ -136,6 +139,11 @@ export default function LoginPage({ onGuest }: LoginPageProps) {
                     disabled={emailLoading}
                   />
                 </div>
+                {emailError && (
+                  <p className="text-sm" style={{ color: "var(--destructive, #ef4444)", marginTop: "0.25rem" }}>
+                    ⚠️ {emailError}
+                  </p>
+                )}
                 <button
                   id="btn-login-email"
                   type="submit"

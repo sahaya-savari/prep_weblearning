@@ -1,11 +1,11 @@
 const supabase = require("./supabase");
 
-async function addDocument(originalName, chunks) {
+async function addDocument(originalName, chunks, userId = null) {
   if (!supabase) throw new Error("Supabase URL or Key not configured");
   
   const { data: doc, error: docError } = await supabase
     .from('documents')
-    .insert({ name: originalName })
+    .insert({ name: originalName, user_id: userId })
     .select()
     .single();
     
@@ -15,7 +15,8 @@ async function addDocument(originalName, chunks) {
   const chunkRows = chunks.map(chunk => ({
     document_id: documentId,
     document_name: originalName,
-    chunk_text: chunk
+    chunk_text: chunk,
+    user_id: userId,
   }));
   
   const { error: chunkError } = await supabase.from('chunks').insert(chunkRows);

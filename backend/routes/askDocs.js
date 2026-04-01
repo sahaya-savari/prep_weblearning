@@ -38,7 +38,11 @@ STUDENT'S QUESTION: ${question}
 
 Answer (be thorough and educational):`;
 
-    const answer = await generate(prompt);
+    const aiResult = await generate(prompt);
+    
+    // In case of a fallback due to quota or network, aiResult.text will be null/undefined,
+    // and aiResult.response will have the fallback message. 
+    const answer = aiResult.text || aiResult.response || "Service temporarily unavailable.";
 
     const sources = chunks.map((c) => ({
       content: c.chunk.slice(0, 400) + (c.chunk.length > 400 ? "..." : ""),
