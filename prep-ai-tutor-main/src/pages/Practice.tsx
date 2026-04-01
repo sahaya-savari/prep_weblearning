@@ -32,6 +32,7 @@ export default function PracticePage() {
   
   const [difficulty, setDifficulty] = useState(() => localStorage.getItem("lastDifficulty") || "easy");
   const [timeLeft, setTimeLeft] = useState(30);
+  const [submitted, setSubmitted] = useState(false);
 
   const currentQ = questions[currentIndex];
 
@@ -118,13 +119,16 @@ export default function PracticePage() {
   };
 
   const handleSubmit = () => {
-    if (selectedAnswer === null || !currentQ) return;
+    if (selectedAnswer === null || !currentQ || submitted) return;
+    setSubmitted(true);
     setRevealed(true);
     const isCorrect = selectedAnswer === currentQ.correctIndex;
     setScore((prev) => ({
       correct: prev.correct + (isCorrect ? 1 : 0),
       total: prev.total + 1,
     }));
+    
+    setTimeout(() => setSubmitted(false), 300);
   };
 
   const handleNext = () => {
@@ -161,15 +165,15 @@ export default function PracticePage() {
       p.topics[selectedExam].lastAttempt = new Date().toISOString();
     });
 
-    // Adaptive Auto-Scaling logic
-    const recentScores = profile.history.filter(h => h.topic === selectedExam).slice(-3);
+    // Adaptive Auto-Scaling logic using safe raw score math bounded limits
+    const recentScores = profile.history.filter(h => h.topic === selectedExam && h.difficulty === difficulty).slice(-3);
     if (recentScores.length >= 3) {
-       const avg = (recentScores.reduce((acc, curr) => acc + (curr.score / curr.total), 0) / 3) * 100;
+       const avg = recentScores.reduce((acc, curr) => acc + curr.score, 0) / 3;
        const levels = ["easy", "medium", "hard"];
        let index = levels.indexOf(difficulty);
 
-       if (avg >= 80 && index < 2) index++;
-       else if (avg < 50 && index > 0) index--;
+       if (avg > 4 && index < 2) index++;
+       else if (avg < 2 && index > 0) index--;
 
        const newDiff = levels[index] as "easy" | "medium" | "hard";
        if (newDiff !== difficulty) {

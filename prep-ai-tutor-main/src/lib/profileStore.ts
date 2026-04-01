@@ -21,13 +21,22 @@ export interface UserProfile {
 
 const MAX_HISTORY = 50;
 
+export function safeParse<T>(key: string, fallback: T): T {
+  try {
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function getUserProfile(): UserProfile {
   const profileRaw = localStorage.getItem("userProfile");
   
   if (!profileRaw) {
     // Legacy mapping fallback ensuring old stats are safely merged, never overwritten blindingly.
-    const oldScores = JSON.parse(localStorage.getItem("scores") || "[]");
-    const oldStats = JSON.parse(localStorage.getItem("topicStats") || "{}");
+    const oldScores = safeParse("scores", []);
+    const oldStats = safeParse("topicStats", {});
     const lastDiff = localStorage.getItem("lastDifficulty") || "medium";
 
     const defaultProfile: UserProfile = {
@@ -40,7 +49,7 @@ export function getUserProfile(): UserProfile {
     return defaultProfile;
   }
   
-  return JSON.parse(profileRaw);
+  return safeParse("userProfile", { topics: {}, history: [], difficulty: "medium" } as UserProfile);
 }
 
 export function updateUserProfile(updateFn: (profile: UserProfile) => void): UserProfile {
