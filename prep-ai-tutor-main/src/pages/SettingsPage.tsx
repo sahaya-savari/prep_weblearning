@@ -150,7 +150,7 @@ export default function SettingsPage() {
         </div>
       </Card>
 
-      <Button onClick={handleSave} className="btn-glow rounded-xl w-full sm:w-auto mt-4 px-8 border-t-2 border-primary/20 bg-background/50 hover:bg-background">
+      <Button onClick={handleSave} className="btn-glow rounded-xl w-full sm:w-auto mt-4 px-8 bg-primary text-primary-foreground hover:bg-primary/90">
         <Save className="mr-2 h-4 w-4" /> Apply Changes Globally
       </Button>
     </motion.div>

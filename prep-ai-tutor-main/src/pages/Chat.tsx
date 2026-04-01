@@ -165,6 +165,23 @@ export default function ChatPage() {
                   Go to Knowledge Base
                 </Button>
               )}
+              
+              {documents.length > 0 && (
+                <div className="flex flex-col gap-3 mt-4 items-center">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Active Notes</p>
+                  <div className="flex flex-wrap gap-2 justify-center max-w-sm">
+                    {documents.map(doc => (
+                       <Badge key={doc.id} variant="outline" className="text-xs bg-muted/50 text-foreground/80 font-normal">
+                         <FileText className="h-3 w-3 mr-1.5 opacity-60" />
+                         {doc.name}
+                       </Badge>
+                    ))}
+                  </div>
+                  <Button variant="outline" size="sm" className="mt-2 rounded-xl" onClick={() => navigate("/knowledge")}>
+                    Manage Notes
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
