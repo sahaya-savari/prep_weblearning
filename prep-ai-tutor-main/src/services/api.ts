@@ -98,6 +98,8 @@ export interface GenerateMCQPayload {
   topic?: string;
   difficulty?: string;
   count?: number;
+  weakTopics?: string[];
+  strongTopics?: string[];
 }
 
 export interface GenerateMCQResponse {

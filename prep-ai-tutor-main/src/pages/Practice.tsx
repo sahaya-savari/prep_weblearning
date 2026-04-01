@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAppContext } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { BookOpen, CheckCircle2, XCircle, ArrowRight, RotateCcw, BrainCircuit, L
 import { motion, AnimatePresence } from "framer-motion";
 import { ShareActions } from "@/components/ShareActions";
 import { useToast } from "@/hooks/use-toast";
+import { updateUserProfile, getUserProfile, getWeakTopics } from "@/lib/profileStore";
 
 export default function PracticePage() {
   const { selectedExam, updatePracticeStats, selectedAiModel } = useAppContext();
@@ -35,7 +36,6 @@ export default function PracticePage() {
   const currentQ = questions[currentIndex];
 
   // Timer logic
-  import { useEffect } from "react";
   useEffect(() => {
     if (loading || isFinished || !currentQ || revealed) return;
     
@@ -87,7 +87,15 @@ export default function PracticePage() {
     }
 
     try {
-      const data = await generateMCQs({ exam: selectedExam, difficulty, count: 5 });
+      const userProfile = getUserProfile();
+      const weakList = getWeakTopics(userProfile);
+
+      const data = await generateMCQs({ 
+         exam: selectedExam, 
+         difficulty, 
+         count: 5,
+         weakTopics: weakList 
+      });
       setQuestions(data.questions);
       localStorage.setItem(cacheKey, JSON.stringify(data.questions));
       setCurrentIndex(0);
@@ -134,22 +142,42 @@ export default function PracticePage() {
 
     const safeTotal = questions.length || score.total || 5;
 
-    // Advanced Local Storage for Dashboard
-    const localScores = JSON.parse(localStorage.getItem("scores") || "[]");
-    localScores.push({
-      topic: selectedExam,
-      score: score.correct,
-      total: safeTotal,
-      difficulty,
-      date: new Date().toISOString()
-    });
-    localStorage.setItem("scores", JSON.stringify(localScores));
+    // Advanced Safe Merge Local Storage
+    const profile = updateUserProfile(p => {
+      p.history.push({
+        topic: selectedExam,
+        score: score.correct,
+        total: safeTotal,
+        difficulty: difficulty as "easy" | "medium" | "hard",
+        date: new Date().toISOString()
+      });
 
-    const localTopicStats = JSON.parse(localStorage.getItem("topicStats") || "{}");
-    if (!localTopicStats[selectedExam]) localTopicStats[selectedExam] = { correct: 0, wrong: 0 };
-    localTopicStats[selectedExam].correct += score.correct;
-    localTopicStats[selectedExam].wrong += (safeTotal - score.correct);
-    localStorage.setItem("topicStats", JSON.stringify(localTopicStats));
+      if (!p.topics[selectedExam]) {
+         p.topics[selectedExam] = { correct: 0, wrong: 0, lastScore: 0, lastAttempt: "" };
+      }
+      p.topics[selectedExam].correct += score.correct;
+      p.topics[selectedExam].wrong += (safeTotal - score.correct);
+      p.topics[selectedExam].lastScore = score.correct;
+      p.topics[selectedExam].lastAttempt = new Date().toISOString();
+    });
+
+    // Adaptive Auto-Scaling logic
+    const recentScores = profile.history.filter(h => h.topic === selectedExam).slice(-3);
+    if (recentScores.length >= 3) {
+       const avg = (recentScores.reduce((acc, curr) => acc + (curr.score / curr.total), 0) / 3) * 100;
+       const levels = ["easy", "medium", "hard"];
+       let index = levels.indexOf(difficulty);
+
+       if (avg >= 80 && index < 2) index++;
+       else if (avg < 50 && index > 0) index--;
+
+       const newDiff = levels[index] as "easy" | "medium" | "hard";
+       if (newDiff !== difficulty) {
+          setDifficulty(newDiff);
+          localStorage.setItem("lastDifficulty", newDiff);
+          toast({ title: "AI Adjusted Difficulty", description: `You were automatically moved to ${newDiff.toUpperCase()} mode based on your recent performance.` });
+       }
+    }
 
     // Auto-save for logged-in users
     if (user && selectedExam) {
@@ -295,15 +323,22 @@ export default function PracticePage() {
               </div>
             )}
             
-            <div className="max-w-md mx-auto pt-2 flex flex-col gap-4">
+            <div className="max-w-md mx-auto pt-2 flex flex-col gap-4 w-full">
                <ShareActions 
                  content={getMarkdownReport()} 
                  filename={`practice-${selectedExam.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}-${Date.now()}.md`} 
                  subject={`My PrepMind Practice Score: ${score.correct}/${score.total}`} 
                />
-               <Button onClick={handleGenerate} className="w-full btn-glow rounded-xl mt-2">
-                 Start a New Set
-               </Button>
+               <div className="flex flex-col sm:flex-row gap-2 mt-2 w-full">
+                 <Button onClick={handleGenerate} className="flex-1 btn-glow rounded-xl">
+                   Start a New Set
+                 </Button>
+                 {score.correct < score.total && (
+                    <Button variant="secondary" onClick={() => handleGenerate()} className="flex-1 rounded-xl">
+                      Retry Weak Areas
+                    </Button>
+                 )}
+               </div>
             </div>
           </Card>
         </motion.div>

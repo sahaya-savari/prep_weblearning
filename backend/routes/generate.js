@@ -68,6 +68,7 @@ router.post("/", async (req, res) => {
     difficulty = "medium",
     count = 5,
     model = "gemini",
+    weakTopics = [],
   } = req.body;
 
   const cleanTopic = String(topic).trim().slice(0, 200);
@@ -97,6 +98,12 @@ Rules:
 - Ensure high-quality conceptual questions
 `;
 
+  let finalPrompt = prompt;
+  if (Array.isArray(weakTopics) && weakTopics.length > 0) {
+    const validWeaks = weakTopics.slice(0, 5).join(", ");
+    finalPrompt += `\nUser Weak Areas: ${validWeaks}\nFocus closely on testing these concepts to repair foundational gaps.`;
+  }
+
   let finalQuestions = [];
   let isFallback = false;
 
@@ -105,7 +112,7 @@ Rules:
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       // AI generate handles sub-timeouts (60s) and cascades securely
-      const aiResult = await generate(prompt, model, "mcq", cleanTopic);
+      const aiResult = await generate(finalPrompt, model, "mcq", cleanTopic);
       
       if (aiResult.fallback) {
         // AI specifically rejected due to quota or hard error
