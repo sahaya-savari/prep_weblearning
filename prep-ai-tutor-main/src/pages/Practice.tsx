@@ -29,6 +29,7 @@ export default function PracticePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [isFallback, setIsFallback] = useState(false);
   
   const [difficulty, setDifficulty] = useState(() => localStorage.getItem("lastDifficulty") || "easy");
   const [timeLeft, setTimeLeft] = useState(30);
@@ -82,6 +83,7 @@ export default function PracticePage() {
           setIsFinished(false);
           setSaved(false);
           setLoading(false);
+          setIsFallback(false);
           return;
         }
       } catch (e) { /* ignore parse errors and fetch fresh */ }
@@ -108,6 +110,7 @@ export default function PracticePage() {
       setTimeLeft(30);
       setIsFinished(false);
       setSaved(false);
+      setIsFallback(data.fallback || false);
     } catch {
       setError("Backend connection failed. Feature coming soon.");
     } finally {
@@ -240,6 +243,11 @@ export default function PracticePage() {
           <p className="text-sm text-muted-foreground mt-1">
             Context: <Badge variant="secondary" className="rounded-lg">{selectedExam}</Badge>
           </p>
+          {isFallback && !loading && questions.length > 0 && (
+            <p className="text-amber-500 text-xs mt-2 font-medium bg-amber-500/10 px-2 py-1 rounded w-fit">
+              ⚠️ Showing offline questions (AI temporarily busy)
+            </p>
+          )}
         </div>
         <div className="flex flex-col sm:flex-row gap-3 self-start sm:self-auto w-full sm:w-auto mt-2 sm:mt-0">
           <select 
