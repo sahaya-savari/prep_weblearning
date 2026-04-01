@@ -8,8 +8,8 @@ const { generate, generateFallbackContent } = require("../services/ai");
 function parseCleanJSON(rawString) {
   // Remove markdown blocks ```json and ```
   let cleanString = rawString.replace(/```json/gi, "").replace(/```/g, "").trim();
-  // Attempt to find the array if there's trailing or leading text
-  const jsonMatch = cleanString.match(/\[[\s\S]*\]/);
+  // Attempt to find the object if there's trailing or leading text
+  const jsonMatch = cleanString.match(/\{[\s\S]*\}/);
   if (jsonMatch) cleanString = jsonMatch[0];
   
   return JSON.parse(cleanString);
@@ -20,14 +20,11 @@ function parseCleanJSON(rawString) {
  */
 function mapToLegacyFormat(rawQs) {
   return rawQs.map((q, idx) => {
-    // If the AI somehow returned an array instead of the strict object, pass it through securely
-    if (Array.isArray(q.options) && typeof q.correctIndex === "number") {
+    // If the AI somehow returned perfect legacy array
+    if (typeof q.correctIndex === "number") {
        return q;
     }
 
-    const opts = q.options || {};
-    const arrayOpts = [opts.A || "Option A", opts.B || "Option B", opts.C || "Option C", opts.D || "Option D"];
-    
     let cIndex = 0;
     if (q.answer === "A") cIndex = 0;
     if (q.answer === "B") cIndex = 1;
@@ -37,9 +34,11 @@ function mapToLegacyFormat(rawQs) {
     return {
       id: `q${Date.now()}_${idx}`,
       question: q.question || "Unknown question?",
-      options: arrayOpts,
+      options: Array.isArray(q.options) && q.options.length === 4 
+               ? q.options 
+               : ["Option A", "Option B", "Option C", "Option D"],
       correctIndex: cIndex,
-      explanation: "AI generated explanation not provided under strict scheme."
+      explanation: q.explanation || "Detailed explanation not provided."
     };
   });
 }
@@ -75,30 +74,28 @@ router.post("/", async (req, res) => {
   const cleanExam = String(exam).trim().slice(0, 100);
   const safeCount = Math.min(Math.max(parseInt(count) || 5, 1), 20);
 
-  const prompt = `Based on the provided context (${cleanTopic} for ${cleanExam} at ${difficulty} difficulty), generate exactly ${safeCount} high-quality multiple-choice questions.
+  const prompt = `FORMAT (STRICT JSON ONLY):
+
+{
+  "topic": "${cleanTopic}",
+  "difficulty": "${difficulty}",
+  "questions": [
+    {
+      "question": "string",
+      "options": ["A", "B", "C", "D"],
+      "answer": "A",
+      "explanation": "string"
+    }
+  ]
+}
 
 Rules:
-- Each question must be clear and relevant
-- Each must have 4 options (A, B, C, D)
-- Only ONE correct answer
-- Avoid vague or repeated questions
-
-Return ONLY valid JSON in this format:
-
-[
-  {
-    "question": "...",
-    "options": {
-      "A": "...",
-      "B": "...",
-      "C": "...",
-      "D": "..."
-    },
-    "answer": "A"
-  }
-]
-
-DO NOT return text, explanations, or markdown.`;
+- Exactly ${safeCount} questions about "${cleanTopic}" at ${difficulty} difficulty
+- 4 options each
+- One correct answer (A, B, C, or D)
+- No extra text outside JSON
+- Ensure high-quality conceptual questions
+`;
 
   let finalQuestions = [];
   let isFallback = false;
@@ -118,24 +115,22 @@ DO NOT return text, explanations, or markdown.`;
       }
 
       // STEP 2 & 3: Clean and parse JSON strictly
-      const rawQs = parseCleanJSON(aiResult.text);
+      const jsonResponse = parseCleanJSON(aiResult.text);
 
-      if (!Array.isArray(rawQs)) {
-        throw new Error("Parsed JSON is not an array");
+      if (!jsonResponse || !Array.isArray(jsonResponse.questions)) {
+        throw new Error("Parsed JSON does not contain 'questions' array");
       }
+
+      const rawQs = jsonResponse.questions;
 
       // STEP 2.5: Strict validation
       const validQs = rawQs.filter(q =>
         q.question &&
-        q.options &&
-        q.options.A &&
-        q.options.B &&
-        q.options.C &&
-        q.options.D &&
+        Array.isArray(q.options) && q.options.length === 4 &&
         ["A","B","C","D"].includes(q.answer)
       );
 
-      // Map strict AI schema to frontend's expected format without breaking architecture
+      // Map strict AI schema to frontend's expected format
       const mappedQs = mapToLegacyFormat(validQs);
       
       // STEP 5: Remove duplicates

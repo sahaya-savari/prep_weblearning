@@ -28,20 +28,73 @@ export default function PracticePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  
+  const [difficulty, setDifficulty] = useState(() => localStorage.getItem("lastDifficulty") || "easy");
+  const [timeLeft, setTimeLeft] = useState(30);
 
   const currentQ = questions[currentIndex];
+
+  // Timer logic
+  import { useEffect } from "react";
+  useEffect(() => {
+    if (loading || isFinished || !currentQ || revealed) return;
+    
+    if (timeLeft <= 0) {
+      // Timeout auto-submit
+      setRevealed(true);
+      setTimeout(() => {
+        if (currentIndex < questions.length - 1) {
+           setCurrentIndex(i => i + 1);
+           setSelectedAnswer(null);
+           setRevealed(false);
+           setTimeLeft(30);
+        } else {
+           handleFinish();
+        }
+      }, 2500); // Brief pause to see correct answer
+      return;
+    }
+
+    const timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
+    return () => clearInterval(timer);
+  }, [timeLeft, loading, isFinished, currentQ, revealed, currentIndex, questions.length]);
 
   const handleGenerate = async () => {
     if (!selectedExam) return;
     setLoading(true);
     setError("");
+    localStorage.setItem("lastDifficulty", difficulty);
+
+    const cacheKey = `quiz_cache_${selectedExam}_${difficulty}`;
+    const cached = localStorage.getItem(cacheKey);
+    
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setQuestions(parsed);
+          setCurrentIndex(0);
+          setSelectedAnswer(null);
+          setRevealed(false);
+          setScore({ correct: 0, total: 0 });
+          setTimeLeft(30);
+          setIsFinished(false);
+          setSaved(false);
+          setLoading(false);
+          return;
+        }
+      } catch (e) { /* ignore parse errors and fetch fresh */ }
+    }
+
     try {
-      const data = await generateMCQs({ exam: selectedExam, count: 5 });
+      const data = await generateMCQs({ exam: selectedExam, difficulty, count: 5 });
       setQuestions(data.questions);
+      localStorage.setItem(cacheKey, JSON.stringify(data.questions));
       setCurrentIndex(0);
       setSelectedAnswer(null);
       setRevealed(false);
       setScore({ correct: 0, total: 0 });
+      setTimeLeft(30);
       setIsFinished(false);
       setSaved(false);
     } catch {
@@ -71,12 +124,32 @@ export default function PracticePage() {
       setCurrentIndex((i) => i + 1);
       setSelectedAnswer(null);
       setRevealed(false);
+      setTimeLeft(30);
     }
   };
 
   const handleFinish = async () => {
     updatePracticeStats(score.correct, score.total);
     setIsFinished(true);
+
+    const safeTotal = questions.length || score.total || 5;
+
+    // Advanced Local Storage for Dashboard
+    const localScores = JSON.parse(localStorage.getItem("scores") || "[]");
+    localScores.push({
+      topic: selectedExam,
+      score: score.correct,
+      total: safeTotal,
+      difficulty,
+      date: new Date().toISOString()
+    });
+    localStorage.setItem("scores", JSON.stringify(localScores));
+
+    const localTopicStats = JSON.parse(localStorage.getItem("topicStats") || "{}");
+    if (!localTopicStats[selectedExam]) localTopicStats[selectedExam] = { correct: 0, wrong: 0 };
+    localTopicStats[selectedExam].correct += score.correct;
+    localTopicStats[selectedExam].wrong += (safeTotal - score.correct);
+    localStorage.setItem("topicStats", JSON.stringify(localTopicStats));
 
     // Auto-save for logged-in users
     if (user && selectedExam) {
@@ -134,10 +207,23 @@ export default function PracticePage() {
             Context: <Badge variant="secondary" className="rounded-lg">{selectedExam}</Badge>
           </p>
         </div>
-        <Button onClick={handleGenerate} disabled={loading} className="btn-glow self-start sm:self-auto px-4 rounded-xl">
-          <RotateCcw className="mr-2 h-4 w-4" />
-          {questions.length ? "New Set" : "Generate MCQs"}
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-3 self-start sm:self-auto w-full sm:w-auto mt-2 sm:mt-0">
+          <select 
+            className="h-10 px-3 rounded-xl border border-border/40 bg-muted/30 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+            value={difficulty}
+            onChange={(e) => setDifficulty(e.target.value)}
+            disabled={loading}
+          >
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard">Hard</option>
+          </select>
+
+          <Button onClick={handleGenerate} disabled={loading} className="btn-glow px-4 rounded-xl">
+            <RotateCcw className="mr-2 h-4 w-4" />
+            {questions.length ? "New Set" : "Generate MCQs"}
+          </Button>
+        </div>
       </div>
 
       {loading && (
@@ -237,8 +323,13 @@ export default function PracticePage() {
                 <Badge variant="outline" className="rounded-lg font-mono">
                   Q{currentIndex + 1}/{questions.length}
                 </Badge>
-                <div className="text-sm text-muted-foreground font-medium">
-                  Score: <span className="text-foreground">{score.correct}/{score.total}</span>
+                <div className="text-sm font-bold flex items-center gap-3">
+                  <span className={`px-2 py-0.5 rounded-md border text-xs font-mono
+                    ${timeLeft <= 5 ? "text-destructive border-destructive/30 bg-destructive/10 animate-pulse" : "text-primary border-primary/20 bg-primary/10"}
+                  `}>
+                    00:{timeLeft.toString().padStart(2, '0')}
+                  </span>
+                  Score: <span className="text-foreground ml-1">{score.correct}/{score.total}</span>
                 </div>
               </div>
 
