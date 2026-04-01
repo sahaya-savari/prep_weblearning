@@ -44,8 +44,13 @@ function generateFallbackContent(type, topic = "this topic", count = 5) {
       };
 
     case "chat":
+      const isShort = topic.length < 10 || ["hi", "hello", "hey", "test"].includes(topic.toLowerCase().trim());
+      const chatRes = isShort
+        ? "Hello! I am currently operating in offline fallback mode because the AI servers are at maximum capacity or currently unavailable. Please wait a few moments and try answering again."
+        : `I am currently offline due to AI capacity limits and cannot actively process your request about "${topic}". Please try again in a few minutes when I reconnect.`;
+      
       return {
-        response: `I can help you understand ${topic}. This is a fundamental concept that covers key principles in computer science. While my detailed AI response is temporarily unavailable (quota limit), here are some study tips: Review official documentation, practice with small examples, and focus on understanding the 'why' behind the concept, not just the 'how'. Please try again in a few minutes for a full AI-generated response.`,
+        response: chatRes,
         fallback: true,
       };
 
