@@ -14,6 +14,7 @@ import Teach from "./pages/Teach";
 import Learn from "./pages/Learn";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import Progress from "./pages/Progress";
+import Dashboard from "./pages/Dashboard";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 import { useState } from "react";
@@ -64,6 +65,7 @@ function AppRoutes() {
           <Route path="/learn" element={<Learn />} />
           <Route path="/knowledge" element={<KnowledgeBase />} />
           <Route path="/progress" element={<Progress />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

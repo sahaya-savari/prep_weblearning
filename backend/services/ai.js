@@ -1,7 +1,7 @@
 const { callGemini } = require("./gemini");
 
 // ── Fallback content generator ────────────────────────
-function generateFallbackContent(type, topic = "this topic") {
+function generateFallbackContent(type, topic = "this topic", count = 5) {
   switch (type) {
     case "teach":
       return {
@@ -22,33 +22,24 @@ function generateFallbackContent(type, topic = "this topic") {
       };
 
     case "mcq":
+      const fallbackQuestions = [];
+      for (let i = 1; i <= count; i++) {
+        fallbackQuestions.push({
+          id: `f_q${i}`,
+          question: `Which of the following is an accurate statement about ${topic}? (Fallback Question ${i})`,
+          options: [
+            "It is completely irrelevant to modern computing.",
+            "It is a core concept that improves system design.",
+            "It is only used in legacy mainframes.",
+            "It prevents security vulnerabilities out of the box."
+          ],
+          correctIndex: 1,
+          explanation: `${topic} provides essential structure for modern systems. This is a fallback question designed to test core principles.`
+        });
+      }
+
       return {
-        questions: [
-          {
-            id: "q1",
-            question: `Which of the following best describes the core purpose of ${topic}?`,
-            options: [
-              "To manage memory allocation",
-              "To provide a structured approach to problem-solving",
-              "To enable network communication",
-              "To handle user authentication",
-            ],
-            correctIndex: 1,
-            explanation: `${topic} provides a structured approach to solving specific types of computational problems.`,
-          },
-          {
-            id: "q2",
-            question: `What is a key advantage of using ${topic}?`,
-            options: [
-              "It eliminates the need for testing",
-              "It guarantees 100% performance improvement",
-              "It improves code organization and maintainability",
-              "It automatically handles all edge cases",
-            ],
-            correctIndex: 2,
-            explanation: "Well-structured code using proper concepts improves long-term maintainability.",
-          },
-        ],
+        questions: fallbackQuestions,
         fallback: true,
       };
 

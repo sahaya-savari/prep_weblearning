@@ -9,7 +9,8 @@ import {
   FolderOpen,
   Sparkles,
   Bot,
-  Zap
+  Zap,
+  LayoutDashboard
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -40,6 +41,7 @@ const mainItems = [
 ];
 
 const toolItems = [
+  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Knowledge Base", url: "/knowledge", icon: FolderOpen },
   { title: "Progress", url: "/progress", icon: BarChart3 },
   { title: "Settings", url: "/settings", icon: Settings },

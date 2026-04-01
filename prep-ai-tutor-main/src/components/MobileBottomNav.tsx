@@ -1,11 +1,11 @@
 import { NavLink } from "@/components/NavLink";
-import { Home, BookOpen, MessageSquare, GraduationCap, Brain, FolderOpen, BarChart3, Settings } from "lucide-react";
+import { Home, BookOpen, MessageSquare, GraduationCap, Brain, FolderOpen, BarChart3, Settings, LayoutDashboard } from "lucide-react";
 import { useLocation } from "react-router-dom";
 
 const items = [
   { title: "Home", url: "/", icon: Home },
   { title: "Practice", url: "/practice", icon: BookOpen },
-  { title: "Chat", url: "/chat", icon: MessageSquare },
+  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Learn", url: "/learn", icon: Brain },
   { title: "More", url: "/settings", icon: Settings },
 ];
