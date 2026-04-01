@@ -78,11 +78,12 @@ ${rawPrompt}`;
       } catch (err) {
         const status = err?.response?.status;
         const errMsg = err?.response?.data?.error?.message || err.message;
+        const is503 = errMsg.includes("503") || errMsg.toLowerCase().includes("capacity") || status === 503;
 
-        if (status === 429) {
-          lastError = `Quota exceeded on ${model}`;
-          console.warn(`[Gemini] 429 on ${model} attempt ${attempt}. ${attempt < 2 ? "Retrying..." : "Moving to next model."}`);
-          if (attempt < 2) await sleep(1500);
+        if (status === 429 || is503) {
+          lastError = `Capacity/Quota exceeded on ${model}`;
+          console.warn(`[Gemini] 429/503 on ${model} attempt ${attempt}. ${attempt < 2 ? "Retrying..." : "Moving to next model."}`);
+          if (attempt < 2) await sleep(1200);
           continue; // retry same model once, then move on
         }
 

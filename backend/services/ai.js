@@ -54,8 +54,21 @@ function generateFallbackContent(type, topic = "this topic", count = 5) {
   }
 }
 
+// ── Anti-Spam Cooldown Math ───────────────────────────
+let lastFailureTime = 0;
+
+function shouldUseFallback() {
+  const now = Date.now();
+  if (now - lastFailureTime < 5000) return true;
+  return false;
+}
+
 // ── AI router ─────────────────────────────────────────
 async function generate(prompt, reqModel = "gemini", type = "generic", topic = "this topic") {
+  if (shouldUseFallback()) {
+    return { ...generateFallbackContent(type, topic), text: null };
+  }
+
   if (reqModel === "ollama") {
     // Only attempt Ollama if not pointed at localhost in production
     const isProd = process.env.NODE_ENV === "production";
@@ -91,6 +104,7 @@ async function generate(prompt, reqModel = "gemini", type = "generic", topic = "
     }
 
     // Quota or network issue — return graceful fallback
+    lastFailureTime = Date.now();
     return { ...generateFallbackContent(type, topic), text: null };
   }
 }
