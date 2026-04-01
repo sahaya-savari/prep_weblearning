@@ -11,7 +11,7 @@ import { BookOpen, CheckCircle2, XCircle, ArrowRight, RotateCcw, BrainCircuit, L
 import { motion, AnimatePresence } from "framer-motion";
 import { ShareActions } from "@/components/ShareActions";
 import { useToast } from "@/hooks/use-toast";
-import { updateUserProfile, getUserProfile, getWeakTopics } from "@/lib/profileStore";
+import { updateUserProfile, getUserProfile, getWeakTopics, getStrengthTopics } from "@/lib/profileStore";
 
 export default function PracticePage() {
   const { selectedExam, updatePracticeStats, selectedAiModel } = useAppContext();
@@ -90,12 +90,14 @@ export default function PracticePage() {
     try {
       const userProfile = getUserProfile();
       const weakList = getWeakTopics(userProfile);
+      const strongList = getStrengthTopics(userProfile);
 
       const data = await generateMCQs({ 
          exam: selectedExam, 
          difficulty, 
          count: 5,
-         weakTopics: weakList 
+         weakTopics: weakList,
+         strongTopics: strongList
       });
       setQuestions(data.questions);
       localStorage.setItem(cacheKey, JSON.stringify(data.questions));

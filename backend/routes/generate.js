@@ -62,20 +62,22 @@ function removeDuplicates(questions) {
  * Returns: { success, fallback?, questions: MCQQuestion[] }
  */
 router.post("/", async (req, res) => {
-  const {
-    exam = "Computer Science",
-    topic = "General",
-    difficulty = "medium",
-    count = 5,
-    model = "gemini",
-    weakTopics = [],
-  } = req.body;
+  try {
+    const {
+      exam = "Computer Science",
+      topic = "General",
+      difficulty = "medium",
+      count = 5,
+      model = "gemini",
+      weakTopics = [],
+      strongTopics = [],
+    } = req.body;
 
-  const cleanTopic = String(topic).trim().slice(0, 200);
-  const cleanExam = String(exam).trim().slice(0, 100);
-  const safeCount = Math.min(Math.max(parseInt(count) || 5, 1), 20);
+    const cleanTopic = String(topic).trim().slice(0, 200);
+    const cleanExam = String(exam).trim().slice(0, 100);
+    const safeCount = Math.min(Math.max(parseInt(count) || 5, 1), 20);
 
-  const prompt = `FORMAT (STRICT JSON ONLY):
+    const prompt = `FORMAT (STRICT JSON ONLY):
 
 {
   "topic": "${cleanTopic}",
@@ -98,90 +100,84 @@ Rules:
 - Ensure high-quality conceptual questions
 `;
 
-  let finalPrompt = prompt;
-  if (Array.isArray(weakTopics) && weakTopics.length > 0) {
-    const validWeaks = weakTopics.slice(0, 5).join(", ");
-    finalPrompt += `\nUser Weak Areas: ${validWeaks}\nFocus closely on testing these concepts to repair foundational gaps.`;
-  }
+    let finalPrompt = prompt;
+    if (Array.isArray(weakTopics) && weakTopics.length > 0) {
+      const validWeaks = weakTopics.slice(0, 5).join(", ");
+      finalPrompt += `\nUser Weak Areas: ${validWeaks}\nFocus closely on testing these concepts to repair foundational gaps.`;
+    }
+    if (Array.isArray(strongTopics) && strongTopics.length > 0) {
+      const validStr = strongTopics.slice(0, 5).join(", ");
+      finalPrompt += `\nUser Strong Areas: ${validStr}\nMake questions on these concepts particularly tricky.`;
+    }
 
-  let finalQuestions = [];
-  let isFallback = false;
+    let finalQuestions = [];
+    let isFallback = false;
 
-  // STEP 4 & 6: Retry loops and Timeout protection
-  // Up to 2 attempts
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      // AI generate handles sub-timeouts (60s) and cascades securely
-      const aiResult = await generate(finalPrompt, model, "mcq", cleanTopic);
-      
-      if (aiResult.fallback) {
-        // AI specifically rejected due to quota or hard error
-        finalQuestions = aiResult.questions || [];
-        isFallback = true;
-        break; // Hard fail - don't retry locally
-      }
+    // Up to 2 attempts
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const aiResult = await generate(finalPrompt, model, "mcq", cleanTopic);
+        
+        if (aiResult.fallback) {
+           finalQuestions = aiResult.questions || [];
+           isFallback = true;
+           break;
+        }
 
-      // STEP 2 & 3: Clean and parse JSON strictly
-      const jsonResponse = parseCleanJSON(aiResult.text);
+        const jsonResponse = parseCleanJSON(aiResult.text);
 
-      if (!jsonResponse || !Array.isArray(jsonResponse.questions)) {
-        throw new Error("Parsed JSON does not contain 'questions' array");
-      }
+        if (!jsonResponse || !Array.isArray(jsonResponse.questions)) {
+          throw new Error("Parsed JSON does not contain 'questions' array");
+        }
 
-      const rawQs = jsonResponse.questions;
+        const rawQs = jsonResponse.questions;
 
-      // STEP 2.5: Strict validation
-      const validQs = rawQs.filter(q =>
-        q.question &&
-        Array.isArray(q.options) && q.options.length === 4 &&
-        ["A","B","C","D"].includes(q.answer)
-      );
+        const validQs = rawQs.filter(q =>
+          q.question &&
+          Array.isArray(q.options) && q.options.length === 4 &&
+          ["A","B","C","D"].includes(q.answer)
+        );
 
-      // Map strict AI schema to frontend's expected format
-      const mappedQs = mapToLegacyFormat(validQs);
-      
-      // STEP 5: Remove duplicates
-      const uniqueQs = removeDuplicates(mappedQs);
-      
-      if (uniqueQs.length > 0) {
-        finalQuestions = uniqueQs;
-        console.info(`[AI] Successfully parsed and validated ${finalQuestions.length} unique questions.`);
-        break; // Success! Escape loop!
-      } else {
-        throw new Error("Generated array contained no valid unique questions");
-      }
+        const mappedQs = mapToLegacyFormat(validQs);
+        
+        const uniqueQs = removeDuplicates(mappedQs);
+        
+        if (uniqueQs.length > 0) {
+          finalQuestions = uniqueQs;
+          console.info(`[AI] Successfully parsed and validated ${finalQuestions.length} unique questions.`);
+          break; 
+        } else {
+          throw new Error("Generated array contained no valid unique questions");
+        }
 
-    } catch (err) {
-      console.error(`[AI] Generate attempt ${attempt} failed: ${err.message}`);
-      // STEP 7: Log errors only
-      if (attempt === 2) {
-        isFallback = true; // Exhausted attempts, trigger fallback padding next
+      } catch (err) {
+        console.error(`[AI] Generate attempt ${attempt} failed: ${err.message}`);
+        if (attempt === 2) {
+          isFallback = true; 
+        }
       }
     }
+
+    if (finalQuestions.length < safeCount) {
+      console.info(`[AI] Pad missing: requested ${safeCount}, got ${finalQuestions.length}. Padding with fallback.`);
+      const missingCount = safeCount - finalQuestions.length;
+      
+      const extras = generateFallbackContent("mcq", cleanTopic, missingCount).questions;
+      finalQuestions.push(...extras);
+    }
+
+    finalQuestions = removeDuplicates(finalQuestions);
+    finalQuestions = finalQuestions.slice(0, safeCount);
+
+    return res.json({ 
+      success: true, 
+      fallback: isFallback, 
+      questions: finalQuestions 
+    });
+  } catch (globalErr) {
+    console.error(`[AI] Global Generate failure: ${globalErr.message}`);
+    return res.status(500).json({ success: false, message: globalErr.message });
   }
-
-  // STEP 4: Ensure minimum questions (Pad missing or regenerate fallbacks)
-  if (finalQuestions.length < safeCount) {
-    console.info(`[AI] Pad missing: requested ${safeCount}, got ${finalQuestions.length}. Padding with fallback.`);
-    const missingCount = safeCount - finalQuestions.length;
-    
-    // Fill the gap with safe offline generics
-    const extras = generateFallbackContent("mcq", cleanTopic, missingCount).questions;
-    finalQuestions.push(...extras);
-  }
-
-  // Double check duplicates again just in case padding overlapped
-  finalQuestions = removeDuplicates(finalQuestions);
-  
-  // Truncate if safe count exceeded 
-  finalQuestions = finalQuestions.slice(0, safeCount);
-
-  // Return exactly the expected structure
-  return res.json({ 
-    success: true, 
-    fallback: isFallback, 
-    questions: finalQuestions 
-  });
 });
 
 module.exports = router;
