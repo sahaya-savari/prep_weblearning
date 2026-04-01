@@ -18,20 +18,30 @@ const upload = multer({
   },
 });
 
-// Soft auth — attach user if Bearer token present, but don't block guests.
-// This lets authenticated users have their uploads scoped to their user_id.
-async function softAuth(req, _res, next) {
-  const authHeader = req.headers.authorization;
-  if (authHeader?.startsWith("Bearer ") && supabase) {
-    const token = authHeader.replace("Bearer ", "").trim();
-    try {
-      const { data: { user } } = await supabase.auth.getUser(token);
-      if (user) req.supabaseUser = user;
-    } catch {
-      // Non-fatal — continue as guest
-    }
+// Require Supabase auth and attach the user to req.user for downstream handlers.
+async function requireAuth(req, res, next) {
+  if (!supabase) {
+    return res.status(503).json({ success: false, message: "Database not configured" });
   }
-  next();
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ success: false, message: "Missing authorization token" });
+  }
+
+  const token = authHeader.replace("Bearer ", "").trim();
+
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) {
+      return res.status(401).json({ success: false, message: "Invalid or expired token" });
+    }
+
+    req.user = user;
+    next();
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Internal Auth Error" });
+  }
 }
 
 /**
@@ -39,11 +49,11 @@ async function softAuth(req, _res, next) {
  * Multipart form with field "file"
  * Returns: { documentId, name }
  */
-router.post("/", softAuth, upload.single("file"), async (req, res) => {
+router.post("/", requireAuth, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: "No file uploaded" });
     const originalName = req.file.originalname;
-    const userId = req.supabaseUser?.id ?? null; // null for guests — stored as anonymous
+    const userId = req.user.id; // IMPORTANT: scope uploads to the authenticated user
 
     // Parse → chunk → store
     const text = await parseFile(req.file.buffer, originalName);
@@ -55,11 +65,31 @@ router.post("/", softAuth, upload.single("file"), async (req, res) => {
 
     const documentId = await addDocument(originalName, chunks, userId);
 
-    console.info(`[/api/upload] "${originalName}" → ${chunks.length} chunks, user=${userId ?? "guest"}`);
+    console.info(`[/api/upload] "${originalName}" → ${chunks.length} chunks, user=${userId}`);
     res.json({ documentId, name: originalName });
   } catch (err) {
     console.error("[/api/upload] Global error:", err.message);
     res.status(500).json({ success: false, message: err.message || "File processing failed" });
+  }
+});
+
+// Fetch documents belonging to the authenticated user only.
+router.get("/", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const { data, error } = await supabase
+      .from("documents")
+      .select("*")
+      .eq("user_id", userId);
+
+    if (error) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+
+    return res.json({ success: true, documents: data });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
   }
 });
 
