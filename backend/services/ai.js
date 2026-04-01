@@ -44,10 +44,22 @@ function generateFallbackContent(type, topic = "this topic", count = 5) {
       };
 
     case "chat":
-      const isShort = topic.length < 10 || ["hi", "hello", "hey", "test"].includes(topic.toLowerCase().trim());
-      const chatRes = isShort
-        ? "Hello! I am currently operating in offline fallback mode because the AI servers are at maximum capacity or currently unavailable. Please wait a few moments and try answering again."
-        : `I am currently offline due to AI capacity limits and cannot actively process your request about "${topic}". Please try again in a few minutes when I reconnect.`;
+      const text = topic.toLowerCase().trim();
+      let chatRes = `Quick answer: ${topic} is an important concept. Try generating a quiz for better understanding.`;
+
+      if (["hi", "hello", "hey", "test"].includes(text)) {
+        chatRes = "Hey! Ask me a topic and I’ll help.";
+      } else if (text.includes("array")) {
+        chatRes = "Array: a collection of elements stored in order. Example: [1,2,3]";
+      } else if (text.includes("string")) {
+        chatRes = "String: sequence of characters. Example: 'hello'";
+      } else if (text.includes("stack")) {
+        chatRes = "Stack: LIFO structure. Push adds, pop removes.";
+      } else if (text.includes("queue")) {
+        chatRes = "Queue: FIFO structure. Enqueue adds, dequeue removes.";
+      } else if (text.length < 10) {
+        chatRes = "Ask a topic (e.g., arrays, strings, stack).";
+      }
       
       return {
         response: chatRes,
