@@ -15,7 +15,7 @@ router.post("/", async (req, res) => {
       exam = "General",
       chatHistory = [],
       notebookMode = false,
-      model = "gemini",
+      model = "groq",
     } = req.body;
 
     if (!message || typeof message !== "string" || message.trim().length === 0) {
@@ -65,15 +65,19 @@ Assistant:`;
       return res.json({
         success: true,
         fallback: true,
-        response: aiResult.response,
+        response: aiResult.response || aiResult.text,
+        provider: aiResult.provider || "fallback",
+        cost: aiResult.cost || 0,
         ...(sources.length > 0 && { sources }),
       });
     }
 
     return res.json({
       success: true,
-      fallback: false,
+      fallback: aiResult.provider !== "groq",
       response: aiResult.text,
+      provider: aiResult.provider || "groq",
+      cost: aiResult.cost || 0,
       ...(sources.length > 0 && { sources }),
     });
     } catch (err) {

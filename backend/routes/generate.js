@@ -68,7 +68,7 @@ router.post("/", async (req, res) => {
       topic = "General",
       difficulty = "medium",
       count = 5,
-      model = "gemini",
+      model = "groq",
       weakTopics = [],
       strongTopics = [],
     } = req.body;
@@ -112,11 +112,15 @@ Rules:
 
     let finalQuestions = [];
     let isFallback = false;
+    let usedProvider = "fallback";
+    let usedCost = 0;
 
     // Up to 2 attempts
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         const aiResult = await generate(finalPrompt, model, "mcq", cleanTopic);
+        usedProvider = aiResult.provider || usedProvider;
+        usedCost = aiResult.cost || usedCost;
         
         if (aiResult.fallback) {
            finalQuestions = aiResult.questions || [];
@@ -172,6 +176,8 @@ Rules:
     return res.json({ 
       success: true, 
       fallback: isFallback, 
+      provider: usedProvider,
+      cost: usedCost,
       questions: finalQuestions 
     });
   } catch (globalErr) {

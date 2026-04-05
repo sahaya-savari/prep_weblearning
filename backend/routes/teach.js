@@ -8,7 +8,7 @@ const { generate } = require("../services/ai");
  */
 router.post("/", async (req, res) => {
   try {
-    const { topic, exam = "Computer Science", difficulty = "medium", model = "gemini" } = req.body;
+    const { topic, exam = "Computer Science", difficulty = "medium", model = "groq" } = req.body;
 
     if (!topic || typeof topic !== "string" || topic.trim().length === 0) {
       return res.status(400).json({ success: false, message: "topic is required" });
@@ -60,11 +60,15 @@ Difficulty: ${difficulty}
 
     let finalResult = null;
     let isFallback = false;
+    let usedProvider = "fallback";
+    let usedCost = 0;
 
     // Retry Loop + Format Validation
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         const aiResult = await generate(prompt, model, "teach", cleanTopic);
+        usedProvider = aiResult.provider || usedProvider;
+        usedCost = aiResult.cost || usedCost;
 
         if (aiResult.fallback) {
           throw new Error("AI invoked generation fallback. Will drop straight to static generator.");
@@ -112,10 +116,10 @@ Difficulty: ${difficulty}
     if (!finalResult) {
        const { generateFallbackContent } = require("../services/ai");
        const fallback = generateFallbackContent("teach", cleanTopic);
-       return res.json({ success: true, fallback: true, ...fallback });
+       return res.json({ success: true, fallback: true, provider: usedProvider, cost: usedCost, ...fallback });
     }
 
-    return res.json({ success: true, fallback: isFallback, ...finalResult });
+      return res.json({ success: true, fallback: isFallback, provider: usedProvider, cost: usedCost, ...finalResult });
   } catch (globalErr) {
     console.error(`[AI] Global Teach Failure: ${globalErr.message}`);
     return res.status(500).json({ success: false, message: globalErr.message });
