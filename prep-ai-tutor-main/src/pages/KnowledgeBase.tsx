@@ -132,6 +132,7 @@ export default function KnowledgeBasePage() {
               type="file"
               accept=".pdf,.txt,.md"
               className="hidden"
+              aria-label="Upload document file"
               onChange={handleUpload}
             />
             <Button
