@@ -161,7 +161,18 @@ export const teachTopic = async (payload: TeachPayload): Promise<TeachResponse> 
 };
 
 // ── Knowledge Base (RAG) ─────────────────────────────
-export const uploadDocument = async (file: File): Promise<{ documentId: string; name: string }> => {
+export const uploadDocument = async (
+  file: File,
+  captchaToken: string
+): Promise<{ documentId: string; name: string }> => {
+  const session = await supabase.auth.getSession();
+  const token = session?.data?.session?.access_token;
+
+  // Temporary debug logging for upload auth troubleshooting.
+  console.log("TOKEN:", token);
+
+  if (!token) throw new AuthRequiredError();
+
   const formData = new FormData();
   formData.append("file", file);
   const controller = new AbortController();
@@ -170,6 +181,10 @@ export const uploadDocument = async (file: File): Promise<{ documentId: string; 
     const res = await fetch(`${API_BASE}/api/upload`, {
       method: "POST",
       body: formData,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-Captcha-Token": captchaToken,
+      },
       signal: controller.signal,
     });
     clearTimeout(timer);
@@ -185,9 +200,16 @@ export const uploadDocument = async (file: File): Promise<{ documentId: string; 
 export const askFromDocs = async (
   payload: { question: string; documentIds?: string[] }
 ): Promise<{ answer: string; sources: { content: string; documentName: string }[] }> => {
+  const token = await getSupabaseToken();
+  if (!token) throw new AuthRequiredError();
+
   return request<{ answer: string; sources: { content: string; documentName: string }[] }>(
     "/api/ask-docs",
-    { method: "POST", body: JSON.stringify(payload) }
+    { 
+      method: "POST", 
+      body: JSON.stringify(payload),
+      headers: { Authorization: `Bearer ${token}` },
+    }
   );
 };
 

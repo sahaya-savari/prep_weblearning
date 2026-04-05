@@ -120,6 +120,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     ensureProfile().then(loadProfile);
+
+    // FIX: Prevent UI showing files from another account by clearing cached documents on user change
+    setDocuments([]);
+    localStorage.removeItem("prepmind_documents");
   }, [user]);
 
   const setSelectedExam = useCallback((exam: string) => {

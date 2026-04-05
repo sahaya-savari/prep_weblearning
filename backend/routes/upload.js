@@ -1,5 +1,6 @@
 const express = require("express");
 const multer = require("multer");
+const axios = require("axios");
 const router = express.Router();
 const { parseFile } = require("../utils/fileParser");
 const { chunkText } = require("../utils/chunker");
@@ -25,11 +26,19 @@ async function requireAuth(req, res, next) {
   }
 
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) {
+  if (!authHeader) {
+    return res.status(401).json({ error: "No token" });
+  }
+
+  // Temporary debug logging for auth troubleshooting.
+  console.log("AUTH HEADER:", authHeader);
+
+  if (!authHeader.startsWith("Bearer ")) {
     return res.status(401).json({ success: false, message: "Missing authorization token" });
   }
 
-  const token = authHeader.replace("Bearer ", "").trim();
+  const token = authHeader.split(" ")[1];
+  console.log("TOKEN:", token);
 
   try {
     const { data: { user }, error } = await supabase.auth.getUser(token);
@@ -44,12 +53,45 @@ async function requireAuth(req, res, next) {
   }
 }
 
+async function verifyRecaptcha(req, res, next) {
+  const secret = process.env.RECAPTCHA_SECRET_KEY;
+  if (!secret) {
+    return res.status(503).json({ success: false, message: "CAPTCHA not configured on server" });
+  }
+
+  const captchaToken = req.headers["x-captcha-token"];
+  if (!captchaToken || typeof captchaToken !== "string") {
+    return res.status(400).json({ success: false, message: "Missing CAPTCHA token" });
+  }
+
+  try {
+    const body = new URLSearchParams({
+      secret,
+      response: captchaToken,
+      remoteip: req.ip,
+    });
+
+    const verifyRes = await axios.post("https://www.google.com/recaptcha/api/siteverify", body.toString(), {
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      timeout: 10000,
+    });
+
+    if (!verifyRes?.data?.success) {
+      return res.status(401).json({ success: false, message: "CAPTCHA verification failed" });
+    }
+
+    return next();
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "CAPTCHA verification error" });
+  }
+}
+
 /**
  * POST /api/upload
  * Multipart form with field "file"
  * Returns: { documentId, name }
  */
-router.post("/", requireAuth, upload.single("file"), async (req, res) => {
+router.post("/", verifyRecaptcha, requireAuth, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: "No file uploaded" });
     const originalName = req.file.originalname;

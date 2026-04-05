@@ -8,6 +8,7 @@ import { useAppContext, type UploadedDocument } from "@/contexts/AppContext";
 import { uploadDocument, askFromDocs } from "@/services/api";
 import { FolderOpen, Upload, FileText, Send, Trash2, Bot, Sparkles, CloudUpload } from "lucide-react";
 import { motion } from "framer-motion";
+import ReCAPTCHA from "react-google-recaptcha";
 
 interface QAEntry {
   question: string;
@@ -27,16 +28,28 @@ function formatTime(date: Date): string {
 
 export default function KnowledgeBasePage() {
   const { documents, addDocument, removeDocument } = useAppContext();
+  const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined;
   const [uploading, setUploading] = useState(false);
   const [question, setQuestion] = useState("");
   const [qaHistory, setQaHistory] = useState<QAEntry[]>([]);
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState("");
   const [dragOver, setDragOver] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const recaptchaRef = useRef<ReCAPTCHA>(null);
 
   const processFile = useCallback(async (file: File) => {
     if (!file) return;
+    if (!recaptchaSiteKey) {
+      setError("CAPTCHA is not configured. Please contact support.");
+      return;
+    }
+    if (!captchaToken) {
+      setError("Please complete the CAPTCHA before uploading.");
+      return;
+    }
+
     const allowed = [".pdf", ".txt", ".md"];
     const ext = "." + file.name.split(".").pop()?.toLowerCase();
     if (!allowed.includes(ext)) {
@@ -47,7 +60,7 @@ export default function KnowledgeBasePage() {
     setError("");
     try {
       // Real upload — sends file to backend, processes, stores in Supabase
-      const result = await uploadDocument(file);
+      const result = await uploadDocument(file, captchaToken);
       const doc: UploadedDocument = {
         id: result.documentId,      // real Supabase document ID
         name: result.name,
@@ -56,14 +69,18 @@ export default function KnowledgeBasePage() {
         type: ext,
       };
       addDocument(doc);
+      setCaptchaToken(null);
+      recaptchaRef.current?.reset();
     } catch (err: any) {
       console.error("[KnowledgeBase] Upload failed:", err.message);
       setError(err.message || "Upload failed. Please try again.");
+      setCaptchaToken(null);
+      recaptchaRef.current?.reset();
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
     }
-  }, [addDocument]);
+  }, [addDocument, captchaToken, recaptchaSiteKey]);
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -145,6 +162,18 @@ export default function KnowledgeBasePage() {
           <p className="text-sm font-medium">{dragOver ? "Drop file here" : "Drag & drop a file here"}</p>
           <p className="text-xs text-muted-foreground mt-1">or click to browse • PDF, TXT, MD</p>
         </div>
+
+        {recaptchaSiteKey ? (
+          <div className="pt-1">
+            <ReCAPTCHA
+              ref={recaptchaRef}
+              sitekey={recaptchaSiteKey}
+              onChange={(value) => setCaptchaToken(value)}
+            />
+          </div>
+        ) : (
+          <p className="text-xs text-destructive">CAPTCHA site key missing. Set VITE_RECAPTCHA_SITE_KEY.</p>
+        )}
 
         {uploading && <LoadingSpinner text="Processing document..." />}
 

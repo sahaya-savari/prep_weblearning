@@ -25,7 +25,7 @@ async function addDocument(originalName, chunks, userId = null) {
   return documentId;
 }
 
-async function retrieve(query, documentIds, topK = 5) {
+async function retrieve(query, documentIds, topK = 5, userId = null) {
   if (!supabase) return [];
   
   const queryWords = new Set(
@@ -33,6 +33,11 @@ async function retrieve(query, documentIds, topK = 5) {
   );
 
   let queryBuilder = supabase.from('chunks').select('chunk_text, document_name');
+  
+  if (userId) {
+    queryBuilder = queryBuilder.eq('user_id', userId);
+  }
+
   if (documentIds && documentIds.length > 0) {
     queryBuilder = queryBuilder.in('document_id', documentIds);
   }

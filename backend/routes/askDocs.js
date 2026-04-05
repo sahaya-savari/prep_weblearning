@@ -2,17 +2,45 @@ const express = require("express");
 const router = express.Router();
 const { generate } = require("../services/ai");
 const { retrieve } = require("../services/rag");
+const supabase = require("../services/supabase");
+
+// Require Supabase auth
+async function requireAuth(req, res, next) {
+  if (!supabase) {
+    return res.status(503).json({ success: false, message: "Database not configured" });
+  }
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ success: false, message: "Missing authorization token" });
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) {
+      return res.status(401).json({ success: false, message: "Invalid or expired token" });
+    }
+
+    req.user = user;
+    next();
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Internal Auth Error" });
+  }
+}
 
 /**
  * POST /api/ask-docs
  * Body: { question, documentIds? }
  * Returns: { answer, sources }
  */
-router.post("/", async (req, res) => {
+router.post("/", requireAuth, async (req, res) => {
   try {
     const { question, documentIds = [] } = req.body;
+    const userId = req.user.id; // Get user ID from req.user
     if (!question) return res.status(400).json({ success: false, message: "question is required" });
-    const chunks = await retrieve(question, documentIds, 5);
+    const chunks = await retrieve(question, documentIds, 5, userId);
 
     if (chunks.length === 0) {
       return res.json({
